@@ -946,11 +946,18 @@ proc runServerLoop*(
               websocket,
               "unknown"
             )
-            appState.playerIndices[websocket] = sim.addPlayer(address)
+            let playerIndex = sim.addPlayer(address)
+            appState.playerIndices[websocket] = playerIndex
+            let joinedAddress =
+              if playerIndex >= 0 and playerIndex < sim.players.len:
+                sim.players[playerIndex].address
+              else:
+                address
+            appState.playerAddresses[websocket] = joinedAddress
             replayWriter.writeJoin(
               tickTime(sim.tickCount),
-              appState.playerIndices[websocket],
-              address
+              playerIndex,
+              joinedAddress
             )
             while replayWriter.lastMasks.len < sim.players.len:
               replayWriter.lastMasks.add(0)
@@ -1032,7 +1039,11 @@ proc runServerLoop*(
               websocket,
               "unknown"
             )
-            appState.playerIndices[websocket] = sim.addPlayer(address)
+            let playerIndex = sim.addPlayer(address)
+            appState.playerIndices[websocket] = playerIndex
+            if playerIndex >= 0 and playerIndex < sim.players.len:
+              appState.playerAddresses[websocket] =
+                sim.players[playerIndex].address
             appState.inputMasks[websocket] = 0
             appState.lastAppliedMasks[websocket] = 0
             if websocket in appState.playerViewers:

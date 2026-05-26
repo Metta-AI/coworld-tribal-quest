@@ -399,6 +399,10 @@ proc addDeleteObject(packet: var seq[uint8], objectId: int) =
   packet.addU8(0x03)
   packet.addU16(objectId)
 
+proc addClearObjects(packet: var seq[uint8]) =
+  ## Appends a global protocol object-map reset message.
+  packet.addU8(0x04)
+
 proc objectVisible(
   x,
   y,
@@ -3178,6 +3182,7 @@ proc addCommonSpriteDefinitions(packet: var seq[uint8], sim: SimServer) =
 proc buildSpriteProtocolInit(sim: SimServer): seq[uint8] =
   ## Builds the initial global viewer snapshot.
   result = @[]
+  result.addClearObjects()
   result.addLayer(MapLayerId, MapLayerType, ZoomableLayerFlag)
   result.addViewport(MapLayerId, GlobalViewportWidth, GlobalViewportHeight)
   result.addLayer(TopLeftLayerId, TopLeftLayerType, UiLayerFlag)
@@ -3221,6 +3226,7 @@ proc globalCameraX(sim: SimServer): int =
 proc buildSpriteProtocolPlayerInit(sim: SimServer): seq[uint8] =
   ## Builds the initial sprite player snapshot.
   result = @[]
+  result.addClearObjects()
   result.addLayer(MapLayerId, MapLayerType, ZoomableLayerFlag)
   result.addViewport(MapLayerId, PlayerViewportWidth, PlayerViewportHeight)
   result.addLayer(TopLeftLayerId, TopLeftLayerType, UiLayerFlag)

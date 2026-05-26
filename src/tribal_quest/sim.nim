@@ -4093,15 +4093,39 @@ proc setPlayerMessage*(
       PingDurationTicks
   inc sim.scoreRevision
 
+proc uniquePlayerAddress(sim: SimServer, requested: string): string =
+  ## Returns a live-player-unique display identity for one joining client.
+  let base =
+    if requested.strip().len > 0:
+      requested
+    else:
+      "player"
+  var suffix = 1
+  while true:
+    let candidate =
+      if suffix == 1:
+        base
+      else:
+        base & "_" & $suffix
+    var used = false
+    for player in sim.players:
+      if player.address == candidate:
+        used = true
+        break
+    if not used:
+      return candidate
+    inc suffix
+
 proc addPlayer*(sim: var SimServer, address: string): int =
   ## Adds one player at a valid spawn point.
   inc sim.nextPlayerId
   let form = sim.nextPlayerId.playerFormForId()
   let bounds = sim.playerCollisionBoundsFor(form, FaceDown)
   let spawn = sim.findPlayerSpawn(bounds)
+  let displayAddress = sim.uniquePlayerAddress(address)
   sim.players.add Actor(
     id: sim.nextPlayerId,
-    address: address,
+    address: displayAddress,
     x: spawn.x,
     y: spawn.y,
     form: form,
@@ -7878,6 +7902,7 @@ proc playerDebugAscii*(sim: SimServer, playerIndex: int): string =
   else:
     result.add("PLAYER none\n")
   result.add("PARTY frontier=" & $sim.frontierTiles() &
+    " players=" & $sim.players.len &
     " wood=" & $sim.wood &
     " food=" & $sim.food &
     " stone=" & $sim.stone &
@@ -7967,7 +7992,8 @@ proc playerDebugAscii*(sim: SimServer, playerIndex: int): string =
       player.playerDebugGlyph(i == playerIndex),
       tile.tx,
       tile.ty,
-      "hp=" & $max(player.lives, 0) & "/" & $player.maxHp &
+      "name=" & player.address &
+        " hp=" & $max(player.lives, 0) & "/" & $player.maxHp &
         " mana=" & $player.mana & "/" & $MaxPlayerMana &
         " cd=" & $player.abilityCooldown
     )

@@ -401,6 +401,9 @@ proc assertCurrentSpriteV1Packet(packet: openArray[uint8]) =
   doAssert sawLayer, "sprite_v1 packet should define layers"
   doAssert sawPlayerViewport, "sprite_v1 packet should define the player viewport"
 
+proc startsWithObjectClear(packet: openArray[uint8]): bool =
+  packet.len > 0 and packet[0] == 0x04'u8
+
 proc objectSpriteLabels(parsed: ParsedPacket): seq[string] =
   for obj in parsed.objects.values:
     if parsed.sprites.hasKey(obj.spriteId):
@@ -1337,6 +1340,8 @@ proc testSpriteProtocolPacketMatchesReferenceParsers() =
     initPlayerViewerState(),
     nextState
   )
+  doAssert packet.startsWithObjectClear(),
+    "initial player packets should clear stale browser objects before drawing"
   let parsed = packet.parseSpriteProtocolPacket()
   doAssert parsed.layers.hasKey(MapLayerId)
   doAssert parsed.viewports[MapLayerId].width == PlayerViewportWidth
@@ -1418,6 +1423,68 @@ proc testSpriteProtocolPacketMatchesReferenceParsers() =
   ).parseSpriteProtocolPacket().objectSpriteLabels()
   doAssert "status role healer" in healerLabels
 
+proc testDuplicatePlayerJoinsSpawnDistinctLocalCharacters() =
+  var sim = initTribalQuestForTest()
+  let
+    firstIndex = sim.addPlayer("human")
+    secondIndex = sim.addPlayer("human")
+
+  doAssert sim.players.len == 2
+  doAssert sim.players[firstIndex].address == "human"
+  doAssert sim.players[secondIndex].address == "human_2",
+    "double-joining the same browser URL should still create a distinct player"
+  doAssert sim.players[firstIndex].x != sim.players[secondIndex].x or
+      sim.players[firstIndex].y != sim.players[secondIndex].y,
+    "multiplayer joins should spawn as separate controllable bodies"
+
+  var firstState: PlayerViewerState
+  let firstPacket = sim.buildSpriteProtocolPlayerUpdates(
+    firstIndex,
+    initPlayerViewerState(),
+    firstState
+  )
+  doAssert firstPacket.startsWithObjectClear()
+  let firstParsed = firstPacket.parseSpriteProtocolPacket()
+  doAssert firstParsed.objects.hasKey(
+    PlayerObjectBase + sim.players[firstIndex].id
+  )
+  doAssert firstParsed.objects.hasKey(
+    PlayerObjectBase + sim.players[secondIndex].id
+  )
+  let firstSelfObject = firstParsed.objects[
+    PlayerObjectBase + sim.players[firstIndex].id
+  ]
+  let firstAllyObject = firstParsed.objects[
+    PlayerObjectBase + sim.players[secondIndex].id
+  ]
+  doAssert firstParsed.sprites[firstSelfObject.spriteId].label.startsWith(
+      "selected player"
+    )
+  doAssert firstParsed.sprites[firstAllyObject.spriteId].label.startsWith(
+      "player "
+    )
+
+  var secondState: PlayerViewerState
+  let secondPacket = sim.buildSpriteProtocolPlayerUpdates(
+    secondIndex,
+    initPlayerViewerState(),
+    secondState
+  )
+  doAssert secondPacket.startsWithObjectClear()
+  let secondParsed = secondPacket.parseSpriteProtocolPacket()
+  let secondSelfObject = secondParsed.objects[
+    PlayerObjectBase + sim.players[secondIndex].id
+  ]
+  let secondAllyObject = secondParsed.objects[
+    PlayerObjectBase + sim.players[firstIndex].id
+  ]
+  doAssert secondParsed.sprites[secondSelfObject.spriteId].label.startsWith(
+      "selected player"
+    )
+  doAssert secondParsed.sprites[secondAllyObject.spriteId].label.startsWith(
+      "player "
+    )
+
 proc testSpriteProtocolMatchesCurrentSharedClientContract() =
   var sim = initTribalQuestForTest()
   let playerIndex = sim.addPlayer("protocol")
@@ -1476,10 +1543,13 @@ proc testGlobalSpriteViewFollowsPartyProgress() =
   let initial = sim.buildSpriteProtocolUpdates(
     initGlobalViewerState(),
     nextState
-  ).parseSpriteProtocolPacket()
-  doAssert initial.viewports[MapLayerId].width == GlobalViewportWidth
-  doAssert initial.viewports[MapLayerId].height == GlobalViewportHeight
-  doAssert initial.objects[MapObjectId].x == 0
+  )
+  doAssert initial.startsWithObjectClear(),
+    "initial global packets should clear stale browser objects before drawing"
+  let initialParsed = initial.parseSpriteProtocolPacket()
+  doAssert initialParsed.viewports[MapLayerId].width == GlobalViewportWidth
+  doAssert initialParsed.viewports[MapLayerId].height == GlobalViewportHeight
+  doAssert initialParsed.objects[MapObjectId].x == 0
 
   sim.players[playerIndex].x = SafeZoneRightPixels + GlobalViewportWidth
   sim.players[playerIndex].y = (WorldHeightTiles div 2) * WorldTileSize
@@ -5410,6 +5480,7 @@ testSpriteProtocolWeatherOverlays()
 testSpriteProtocolShowsSurvivalPressureAffordances()
 testRenderedPlayerObservationHasBiomeBackedPixels()
 testSpriteProtocolPacketMatchesReferenceParsers()
+testDuplicatePlayerJoinsSpawnDistinctLocalCharacters()
 testSpriteProtocolMatchesCurrentSharedClientContract()
 testGlobalSpriteViewFollowsPartyProgress()
 testCarriedInventoryTilesAcrossBottomOfPlayerView()
