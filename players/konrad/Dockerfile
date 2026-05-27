@@ -25,7 +25,7 @@ https://github.com/treeform/nimby/releases/download/0.1.26/nimby-Linux-ARM64; \
 
 ENV PATH="/root/.nimby/nim/bin:$PATH"
 
-WORKDIR /workspace/cogame-tribal-quest
+WORKDIR /workspace/coworld-tribal-quest
 COPY tribal_quest.nimble .
 RUN nimble refresh && \
   nimble install -y https://github.com/Metta-AI/bitworld.git && \
@@ -49,7 +49,7 @@ RUN apt-get update && \
   apt-get install -y --no-install-recommends ca-certificates && \
   rm -rf /var/lib/apt/lists/*
 
-WORKDIR /workspace/cogame-tribal-quest/players/konrad
+WORKDIR /workspace/coworld-tribal-quest/players/konrad
 COPY --from=build /bin/konrad /bin/konrad
 
 CMD ["/bin/konrad"]

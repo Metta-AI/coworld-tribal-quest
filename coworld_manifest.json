@@ -163,7 +163,7 @@
     },
     "runnable": {
       "type": "game",
-      "image": "ghcr.io/metta-ai/cogame-tribal-quest:latest",
+      "image": "ghcr.io/metta-ai/coworld-tribal-quest:latest",
       "run": ["/bin/tribal_quest", "--address:0.0.0.0", "--port:8080"]
     }
   },
@@ -174,7 +174,7 @@
       "description": "Coworld player for tribal_quest.",
       "runnable": {
         "type": "player",
-        "image": "ghcr.io/metta-ai/cogame-tribal-quest-konrad:latest",
+        "image": "ghcr.io/metta-ai/coworld-tribal-quest-konrad:latest",
         "run": ["/bin/konrad", "--address:host.docker.internal", "--port:2000"]
       }
     }
