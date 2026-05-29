@@ -42,6 +42,12 @@ proc nonZeroBytes(frame: string): int =
     if ch != char(0):
       inc result
 
+proc closeSocket(socket: WebSocket) =
+  try:
+    socket.hangup()
+  except CatchableError:
+    discard
+
 proc chooseMask(tick, stagnantFrames: int): uint8 =
   let phase = ((tick div 12) + (stagnantFrames div 3)) mod 6
   case phase
@@ -96,7 +102,7 @@ proc runBot(config: BotConfig): Future[int] {.async.} =
         inc nonBlankFrames
       inc frames
   finally:
-    socket.close()
+    socket.closeSocket()
 
   echo "Sent input packets: " & $sent
   echo "Received frame packets: " & $frames

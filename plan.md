@@ -38,6 +38,21 @@ type
 
   FortressEngine* = object
 
+  FortressAdventurerView* = object
+    ok*: bool
+    done*: bool
+    slot*: int
+    agentId*: int
+    teamId*: int
+    x*: int
+    y*: int
+    hp*: int
+    maxHp*: int
+    originX*: int
+    originY*: int
+    width*: int
+    height*: int
+
 proc initFortressEngine*(config: FortressEngineConfig): FortressEngine
 proc close*(engine: var FortressEngine)
 proc claimAdventurer*(engine: var FortressEngine, slot: int, teamId = -1): int
@@ -46,7 +61,7 @@ proc submitAdventurerButtons*(engine: var FortressEngine, slot: int, mask: uint8
 proc submitAdventurerAction*(engine: var FortressEngine, slot: int, action: uint16)
 proc submitAdventurerInput*(engine: var FortressEngine, slot: int, payloadJson: string)
 proc step*(engine: var FortressEngine)
-proc adventurerViewCells*(engine: FortressEngine, slot: int, cells: var openArray[uint8]): FortressAdventurerView
+proc adventurerViewCells*(engine: var FortressEngine, slot: int, cells: var openArray[uint8]): FortressAdventurerView
 proc adventurerObservationJson*(engine: FortressEngine, slot: int): string
 ```
 
