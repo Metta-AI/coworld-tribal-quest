@@ -1,6 +1,9 @@
 import std/[httpclient, json, os, parseopt, strutils]
+
+import bitworld/protocol
 import jsony
-import bitworld/protocol, tribal_quest/[adventure_api, server]
+import quest_runtime
+import tribal_quest/fortress_engine
 
 type
   TribalQuestError = object of CatchableError
@@ -12,8 +15,7 @@ type
     maxTicks: int
     maxGames: int
     tokens: seq[string]
-    fortressAdventureUrl: string
-    adventurerTokens: seq[string]
+    fortressEnginePath: string
     adventurerRole: string
     saveReplayPath: string
     loadReplayPath: string
@@ -96,6 +98,21 @@ proc readConfigInt(node: JsonNode, name: string, value: var int) =
     )
   value = item.getInt()
 
+proc readConfigWorldRuntime(node: JsonNode, name: string) =
+  ## Reads the optional runtime field, which may only select fortress mode.
+  if not node.hasKey(name):
+    return
+  let item = node[name]
+  if item.kind != JString:
+    raise newException(
+      TribalQuestError,
+      "Config field " & name & " must be a string."
+    )
+  try:
+    item.getStr().validateWorldRuntime()
+  except ValueError as e:
+    raise newException(TribalQuestError, e.msg)
+
 proc defaultReplayPath(): string =
   ## Returns the configured replay save path from the environment.
   pathFromCogameEnv(CogameSaveReplayUriEnv)
@@ -119,12 +136,12 @@ proc isKnownConfigField(name: string): bool =
       "maxGames",
       "max-games",
       "tokens",
-      "fortressAdventureUrl",
-      "fortress-adventure-url",
-      "fortress_adventure_url",
-      "adventurerTokens",
-      "adventurer-tokens",
-      "adventurer_tokens",
+      "worldRuntime",
+      "world-runtime",
+      "world_runtime",
+      "fortressEnginePath",
+      "fortress-engine-path",
+      "fortress_engine_path",
       "adventurerRole",
       "adventurer-role",
       "adventurer_role",
@@ -148,10 +165,7 @@ proc validateConfigFields(node: JsonNode) =
   ## Raises when JSON config contains an unknown field.
   for name, _ in node.pairs:
     if not name.isKnownConfigField():
-      raise newException(
-        TribalQuestError,
-        "Unknown config field: " & name
-      )
+      raise newException(TribalQuestError, "Unknown config field: " & name)
 
 proc update(config: var RunConfig, jsonText: string) =
   ## Updates the CLI config from JSON.
@@ -168,6 +182,9 @@ proc update(config: var RunConfig, jsonText: string) =
   if node.kind != JObject:
     raise newException(TribalQuestError, "Config must be a JSON object.")
   node.validateConfigFields()
+  node.readConfigWorldRuntime("worldRuntime")
+  node.readConfigWorldRuntime("world-runtime")
+  node.readConfigWorldRuntime("world_runtime")
   node.readConfigString("address", config.address)
   node.readConfigInt("port", config.port)
   node.readConfigString("saveReplay", config.saveReplayPath)
@@ -188,12 +205,9 @@ proc update(config: var RunConfig, jsonText: string) =
   node.readConfigInt("maxGames", config.maxGames)
   node.readConfigInt("max-games", config.maxGames)
   node.readConfigStrings("tokens", config.tokens)
-  node.readConfigString("fortressAdventureUrl", config.fortressAdventureUrl)
-  node.readConfigString("fortress-adventure-url", config.fortressAdventureUrl)
-  node.readConfigString("fortress_adventure_url", config.fortressAdventureUrl)
-  node.readConfigStrings("adventurerTokens", config.adventurerTokens)
-  node.readConfigStrings("adventurer-tokens", config.adventurerTokens)
-  node.readConfigStrings("adventurer_tokens", config.adventurerTokens)
+  node.readConfigString("fortressEnginePath", config.fortressEnginePath)
+  node.readConfigString("fortress-engine-path", config.fortressEnginePath)
+  node.readConfigString("fortress_engine_path", config.fortressEnginePath)
   node.readConfigString("adventurerRole", config.adventurerRole)
   node.readConfigString("adventurer-role", config.adventurerRole)
   node.readConfigString("adventurer_role", config.adventurerRole)
@@ -217,6 +231,14 @@ proc parseOptionInt(name, value: string): int =
       "Option --" & name & " must be an integer."
     )
 
+proc fortressEngineConfig(config: RunConfig): FortressEngineConfig =
+  ## Builds the required shared-engine config selected by the Quest run config.
+  result = defaultFortressEngineConfig()
+  result.adventurerRole = config.adventurerRole
+  result.path = config.fortressEnginePath
+  if result.path.strip().len == 0:
+    result.path = defaultFortressEnginePath()
+
 proc validate(config: RunConfig) =
   ## Raises when a run config value is outside the supported range.
   if config.maxTicks < 0:
@@ -229,15 +251,14 @@ proc validate(config: RunConfig) =
       TribalQuestError,
       "Config field maxGames must be non-negative."
     )
-  if config.adventurerTokens.len > FortressAdventurerSlots:
-    raise newException(
-      TribalQuestError,
-      "Config field adventurerTokens cannot exceed " &
-        $FortressAdventurerSlots & " entries."
-    )
+  try:
+    config.fortressEngineConfig().validateFortressEngineConfig()
+  except ValueError as e:
+    raise newException(TribalQuestError, e.msg)
 
 proc echoStartupPaths(config: RunConfig) =
-  ## Prints configured replay and score output paths.
+  ## Prints configured runtime, replay, and score output paths.
+  let engineConfig = config.fortressEngineConfig()
   if config.loadReplayPath.len > 0:
     echo "Loading replay file: " & config.loadReplayPath
   if config.saveReplayPath.len > 0:
@@ -252,11 +273,13 @@ proc echoStartupPaths(config: RunConfig) =
     echo "Using " & $config.tokens.len & " player connection tokens."
   else:
     echo "No player connection tokens configured."
-  if config.fortressAdventureUrl.len > 0:
-    echo "Fortress adventure URL: " & config.fortressAdventureUrl
-    echo "Using " & $config.adventurerTokens.len &
-      " Fortress adventurer tokens."
-    echo "Default adventurer role: " & config.adventurerRole
+  echo "World runtime: fortress"
+  echo "Fortress engine path: " & engineConfig.path
+  echo "Fortress world target: " & $engineConfig.worldWidth & "x" &
+    $engineConfig.worldHeight & " tiles"
+  echo "NPC town agent cap: " & $engineConfig.townAgentsPerTeam
+  echo "Adventurer slots: " & $engineConfig.adventurerSlots
+  echo "Default adventurer role: " & config.adventurerRole
   if config.maxTicks > 0:
     echo "Max ticks: " & $config.maxTicks
   else:
@@ -275,8 +298,7 @@ when isMainModule:
       maxTicks: DefaultMaxTicks,
       maxGames: DefaultMaxGames,
       tokens: @[],
-      fortressAdventureUrl: "",
-      adventurerTokens: @[],
+      fortressEnginePath: "",
       adventurerRole: "adventurer",
       saveReplayPath: defaultReplayPath(),
       loadReplayPath: defaultLoadReplayPath(),
@@ -299,12 +321,15 @@ when isMainModule:
         config.maxTicks = key.parseOptionInt(val)
       of "max-games", "maxGames":
         config.maxGames = key.parseOptionInt(val)
-      of "fortress-adventure-url", "fortressAdventureUrl":
+      of "world-runtime", "worldRuntime":
         key.requireOptionValue(val)
-        config.fortressAdventureUrl = val
-      of "adventurer-token", "adventurerToken":
+        try:
+          val.validateWorldRuntime()
+        except ValueError as e:
+          raise newException(TribalQuestError, e.msg)
+      of "fortress-engine-path", "fortressEnginePath":
         key.requireOptionValue(val)
-        config.adventurerTokens.add(val)
+        config.fortressEnginePath = val
       of "adventurer-role", "adventurerRole":
         key.requireOptionValue(val)
         config.adventurerRole = val
@@ -337,14 +362,22 @@ when isMainModule:
     config.update(configJson)
   config.validate()
   config.echoStartupPaths()
-  runServerLoop(
-    config.address,
-    config.port,
-    config.seed,
-    config.saveReplayPath,
-    config.loadReplayPath,
-    config.saveScoresPath,
-    config.tokens,
-    config.maxTicks,
-    config.maxGames
+
+  let engineConfig = config.fortressEngineConfig()
+  runQuestAdventurerPlayerServer(
+    address = config.address,
+    port = config.port,
+    seed = config.seed,
+    saveReplayPath = config.saveReplayPath,
+    loadReplayPath = config.loadReplayPath,
+    saveScoresPath = config.saveScoresPath,
+    tokens = config.tokens,
+    maxTicks = config.maxTicks,
+    maxGames = config.maxGames,
+    fortressEnginePath = engineConfig.path,
+    adventurerRole = engineConfig.adventurerRole,
+    worldWidth = engineConfig.worldWidth,
+    worldHeight = engineConfig.worldHeight,
+    townAgentsPerTeam = engineConfig.townAgentsPerTeam,
+    adventurerSlots = engineConfig.adventurerSlots
   )

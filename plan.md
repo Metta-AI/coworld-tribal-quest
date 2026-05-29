@@ -193,10 +193,10 @@ terrain/world simulation once the engine-backed path works.
 
 The first Quest migration should:
 
-- keep the Quest player-facing adventure client and bundled bots
+- keep the Quest player-facing adventure client shape where it helps
 - keep Quest's public Coworld player entrypoint as `/player`
-- install and launch the shared Fortress engine through a local/package
-  dependency, not a separate public adventure socket
+- require the shared Fortress engine through a local/package dependency, not a
+  separate public adventure socket
 - launch the engine with an `Adventurer` control profile for Quest players
 - bind each Quest player token to one adventurer agent
 - keep towns, fortresses, wilderness actors, and hostile groups running under
@@ -205,17 +205,21 @@ The first Quest migration should:
   input
 - render the shared-engine local view crop and adventurer state
 - keep Quest-specific story, role defaults, scoring, docs, and reference bots
+  only after they are ported to the Fortress-backed contract
 
 Quest should treat the older Party Progressor loop as the product reference:
 one or more adventurers moving through a dangerous world, making forward
 progress, gathering resources, using roles, and surviving encounters. The world
 source changes from Quest's local route simulation to the installed Fortress
-engine, but the player-facing mode remains Quest-owned adventurer play.
+engine, and the old local Quest runtime should be removed instead of maintained
+as a second execution mode. The player-facing mode remains Quest-owned
+adventurer play.
 
-Quest may continue using BitWorld helpers internally for its client and bot
-code, but the shared engine should not need to serve the old BitWorld binary
-sprite protocol. Quest should adapt engine JSON/view-plane data to whatever
-local client shape it needs.
+Quest may continue using BitWorld helpers internally only where they directly
+serve the Fortress-backed adventurer route, such as button-mask compatibility.
+The shared engine should not need to serve the old BitWorld binary sprite
+protocol, and Quest should not keep the old local sim/render/server stack as a
+fallback.
 
 ## Quest Mechanics To Share Upstream
 
@@ -261,19 +265,25 @@ proxy. The production Quest route remains `/player`.
 
 ## Test Plan
 
-Quest validation before pushing plan or migration changes:
+Quest validation before pushing migration changes:
 
 ```sh
 BITWORLD_PATH=${BITWORLD_PATH:-$(pwd)/../bitworld}
 nim r --path:../src --path:$BITWORLD_PATH/src --path:$BITWORLD_PATH tests/tests.nim
-nim c --path:src --path:$BITWORLD_PATH/src --path:$BITWORLD_PATH -o:out/tribal_quest src/tribal_quest.nim
-nim c --path:src --path:$BITWORLD_PATH/src --path:$BITWORLD_PATH -o:out/tribal_quest_konrad players/konrad/konrad.nim
-node --check players/js_konrad/konrad.js
-python3 -m py_compile players/py_konrad/konrad.py scripts/prepare_monster_assets.py
+TRIBAL_FORTRESS_PATH=${TRIBAL_FORTRESS_PATH:-$(pwd)/../coworld-tribal-fortress}
+nim c --path:src --path:$BITWORLD_PATH/src --path:$BITWORLD_PATH --path:$TRIBAL_FORTRESS_PATH/src -o:out/tribal_quest src/tribal_quest.nim
 git diff --check
 ```
 
-Shared engine contract tests to add once implementation starts:
+Until Fortress lands the required `quest_runtime` Nim module, the build command
+should fail immediately on that missing import. That is the intended fail-fast
+state; Quest should not revive the old local simulation to make the command
+green.
+
+Keep the Quest tests intentionally lean while this rewrite is active. They
+should cover the adapter contract, not the deleted local Quest gameplay loop.
+
+Shared engine contract tests to keep or add once implementation starts:
 
 - `TownController` input affects only the assigned town/fortress/civilization
   slice
@@ -295,8 +305,8 @@ Surface-specific smoke tests:
 - Quest `/player` spawns or resumes an adventurer
 - Quest renders an adventurer-centered crop
 - NPC fortresses continue acting while the Quest player moves
-- bundled Quest JS, Python, and Nim bots still connect through Quest's public
-  route or are intentionally updated with documented contract changes
+- Quest reference bots are ported to the Fortress-backed `/player` contract
+  before being reintroduced
 
 ## Assumptions
 
@@ -308,6 +318,7 @@ Surface-specific smoke tests:
 - Quest should not depend on a separate public `/adventure` protocol. Existing
   Fortress adventurer code is a design reference, not the Quest runtime
   boundary.
+- Quest should fail fast when the Fortress runtime package or path is missing.
 - Quest keeps its adventurer-centric viewport while Fortress uses a larger
   fortress/civilization viewport.
 - Adventure mode uses shared-engine JSON/view-plane protocols, not the old

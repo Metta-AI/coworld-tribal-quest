@@ -1,91 +1,68 @@
 # Tribal Quest
 
-Cooperative Coworld expedition RPG where players choose tank, DPS, or healer
-roles, fight biome-specific monsters, rescue villagers, gather supplies, and
-push an endless party frontier to the right.
+Tribal Quest is the adventurer-facing Coworld surface for the shared Tribal
+Fortress world. Quest owns its public `/player` route, controls, scoring, and
+adventurer-centered viewport; the installed Fortress runtime owns the grid
+world, civilizations, settlements, NPC policies, terrain, and step loop.
 
-Tribal Quest uses the BitWorld sprite protocol on the canonical `/player`
-and `/global` websocket routes. The browser player client is served at
-`/client/player`, and the global bird's-eye observer is served at
-`/client/global`.
-
-Tribal Quest is also preparing to run as an adventurer-centric client for
-`coworld-tribal-fortress`. That integration is intentionally Quest-side only in
-this repo: Fortress owns the large grid world and will expose
-`WEBSOCKET /adventure`, while Quest translates its controls, bots, and local
-view into that API. The Quest viewport stays a tight 11 by 11 tactical crop
-even when Fortress runs a much larger world.
+There is no supported local Quest simulation mode anymore. `worldRuntime` is
+always `fortress`, and missing Fortress runtime code should fail at build or
+startup instead of falling back to the old route.
 
 ## Running
 
+Use a sibling Fortress checkout while the shared runtime is local:
+
 ```sh
-nimble install -d
-nimble build
-./tribal_quest --address:0.0.0.0 --port:8080
+BITWORLD_PATH=${BITWORLD_PATH:-$(pwd)/../bitworld}
+TRIBAL_FORTRESS_PATH=${TRIBAL_FORTRESS_PATH:-$(pwd)/../coworld-tribal-fortress}
+nim c \
+  --path:src \
+  --path:$BITWORLD_PATH/src \
+  --path:$BITWORLD_PATH \
+  --path:$TRIBAL_FORTRESS_PATH/src \
+  -o:out/tribal_quest \
+  src/tribal_quest.nim
+./out/tribal_quest --address:127.0.0.1 --port:2000 --fortress-engine-path:$TRIBAL_FORTRESS_PATH
 ```
 
 Open:
 
-- `http://localhost:8080/client/player?address=ws://localhost:8080/player&name=human`
-- `http://localhost:8080/client/global?address=ws://localhost:8080/global`
-- `http://localhost:8080/debug/ascii`
+- `http://localhost:2000/client/player?address=ws://localhost:2000/player&name=human`
 
-For local source-checkout work without installing the package:
+Quest expects the Fortress checkout on the Nim path to expose
+`quest_runtime.runQuestAdventurerPlayerServer`. That runtime is called directly;
+there is no alternate `/adventure` proxy or compile-time fallback.
 
-```sh
-BITWORLD_PATH=${BITWORLD_PATH:-$(pwd)/../bitworld}
-nim c --path:src --path:$BITWORLD_PATH/src --path:$BITWORLD_PATH -o:out/tribal_quest src/tribal_quest.nim
-./out/tribal_quest --address:127.0.0.1 --port:2000
-```
-
-## Bot
-
-The bundled Nim bot is `konrad`.
-
-```sh
-BITWORLD_PATH=${BITWORLD_PATH:-$(pwd)/../bitworld}
-nim c --path:src --path:$BITWORLD_PATH/src --path:$BITWORLD_PATH -o:out/tribal_quest_konrad players/konrad/konrad.nim
-./out/tribal_quest_konrad --address:127.0.0.1 --port:2000 --name=konrad
-```
-
-JavaScript, Python, and Go ports of Konrad live under `players/`.
-
-## Fortress Adventure API
-
-The future Fortress adapter contract is implemented in
-`src/tribal_quest/adventure_api.nim`. It does not change the current local
-simulation server; it provides the stable Quest-side pieces needed while
-Fortress implements its matching endpoint in parallel:
-
-- builds `WEBSOCKET /adventure?slot=<n>&token=<token>&name=<name>&role=<role>`
-  URLs
-- caps Quest adventurer slots at 64
-- converts BitWorld button masks into JSON `adventure.input` messages
-- preserves Quest's 11 by 11 adventurer crop rather than requesting the full
-  Fortress map
-- parses the stable fields Quest needs from one Fortress adventure tick
-
-Optional config fields are accepted for the future adapter:
+Optional config fields:
 
 ```json
 {
-  "fortressAdventureUrl": "ws://localhost:8080",
-  "adventurerTokens": ["slot-0-token"],
+  "worldRuntime": "fortress",
+  "fortressEnginePath": "../coworld-tribal-fortress",
   "adventurerRole": "adventurer"
 }
 ```
 
-## Debugging
+## Fortress Adapter
 
-`/debug/ascii` is the agent-readable render oracle. It prints the current
-11 by 11 player observation, terrain glyphs, occlusion, entities, HP, mana,
-cooldowns, role, biome, weather, and effect state.
+`src/tribal_quest/fortress_engine.nim` keeps the Quest-owned adapter contract:
+
+- validates that only `worldRuntime = fortress` is accepted
+- discovers `TRIBAL_FORTRESS_PATH` or `../coworld-tribal-fortress`
+- targets a 768 by 480 Fortress world with 30 town agents per team
+- caps Quest adventurer slots at 64
+- maps button masks into `adventurer.input` payloads
+- parses the local `view_plane` fields Quest needs for an adventurer crop
+
+The old Party Progressor mechanics are now product reference material for what
+should move into the Fortress engine or Quest adventurer presentation. They are
+not a second runtime in this repo.
 
 ## Project Layout
 
-- `src/tribal_quest.nim` starts the Coworld server.
-- `src/tribal_quest/` contains the simulation, sprite renderer, and server.
-- `data/` contains game sprites and generated monster assets.
-- `players/` contains bundled player bots.
-- `tests/tests.nim` contains the focused gameplay and sprite protocol checks.
-- `FULL_GAME_PLAN.md` records current state and near-term product direction.
+- `src/tribal_quest.nim` starts the Quest `/player` surface on Fortress.
+- `src/tribal_quest/fortress_engine.nim` contains the Quest-side adapter
+  contract.
+- `plan.md` is the integration source of truth for the Quest half.
+- `tests/tests.nim` contains lean adapter-contract checks.

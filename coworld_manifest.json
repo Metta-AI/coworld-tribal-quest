@@ -3,7 +3,7 @@
   "game": {
     "name": "tribal_quest",
     "version": "0.1.0",
-    "description": "A cooperative BitWorld expedition RPG where players talk, choose tank/DPS/healer gear, and push a shared frontier to the right.",
+    "description": "An adventurer-focused Coworld surface that runs on the shared Tribal Fortress grid world.",
     "owner": "treeform@softmax.com",
     "config_schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -14,7 +14,7 @@
       ],
       "properties": {
         "tokens": {
-          "description": "One connection token per player slot, indexed by slot.",
+          "description": "One Quest adventurer connection token per player slot.",
           "type": "array",
           "minItems": 0,
           "maxItems": 64,
@@ -24,24 +24,21 @@
           },
           "default": []
         },
-        "fortressAdventureUrl": {
-          "description": "Optional base websocket URL for the upstream Tribal Fortress /adventure API.",
+        "worldRuntime": {
+          "description": "Only supported runtime. Quest always runs its /player adventurer surface on the installed Tribal Fortress engine.",
+          "type": "string",
+          "enum": [
+            "fortress"
+          ],
+          "default": "fortress"
+        },
+        "fortressEnginePath": {
+          "description": "Local path to a coworld-tribal-fortress checkout or package. If empty, TRIBAL_FORTRESS_PATH or ../coworld-tribal-fortress is used.",
           "type": "string",
           "default": ""
         },
-        "adventurerTokens": {
-          "description": "One Fortress /adventure token per Quest adventurer slot, indexed by slot.",
-          "type": "array",
-          "minItems": 0,
-          "maxItems": 64,
-          "items": {
-            "type": "string",
-            "minLength": 0
-          },
-          "default": []
-        },
         "adventurerRole": {
-          "description": "Default role string to request when Quest connects an adventurer to Fortress.",
+          "description": "Default adventurer role string requested when Quest binds /player slots into the Fortress engine.",
           "type": "string",
           "default": "adventurer"
         },
@@ -52,7 +49,7 @@
           "default": 726896
         },
         "maxTicks": {
-          "description": "Maximum simulation ticks before starting a fresh game, where 0 means no tick limit.",
+          "description": "Maximum Fortress ticks before starting a fresh game, where 0 means no tick limit.",
           "type": "integer",
           "minimum": 0,
           "default": 18000
@@ -68,38 +65,29 @@
     "results_schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
-      "additionalProperties": false,
+      "additionalProperties": true,
       "required": [
         "names",
-        "scores",
-        "hearts",
-        "distance_walked",
-        "frontier_tiles",
-        "personal_frontier_tiles",
-        "roles",
-        "damage_done",
-        "healing_done",
-        "damage_blocked",
-        "messages_sent"
+        "scores"
       ],
       "properties": {
         "names": {
-          "description": "One player name or address per player slot.",
+          "description": "One player name or address per connected adventurer slot.",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "scores": {
-          "description": "Shared team frontier score per player slot.",
+          "description": "Quest adventurer score per connected slot.",
           "type": "array",
           "items": {
             "type": "integer",
             "minimum": 0
           }
         },
-        "hearts": {
-          "description": "One remaining life count per player slot.",
+        "survival_ticks": {
+          "description": "Per-adventurer survival ticks.",
           "type": "array",
           "items": {
             "type": "integer",
@@ -107,80 +95,32 @@
           }
         },
         "distance_walked": {
-          "description": "One total distance walked value per player slot.",
+          "description": "Per-adventurer distance walked.",
           "type": "array",
           "items": {
             "type": "integer",
             "minimum": 0
           }
         },
-        "frontier_tiles": {
-          "description": "Shared farthest rightward progress beyond the safe origin, in tiles.",
+        "civilizations": {
+          "description": "Current civilization metadata for each adventurer slot.",
           "type": "array",
           "items": {
-            "type": "integer",
-            "minimum": 0
-          }
-        },
-        "personal_frontier_tiles": {
-          "description": "Per-player farthest rightward progress beyond the safe origin, in tiles.",
-          "type": "array",
-          "items": {
-            "type": "integer",
-            "minimum": 0
+            "type": "string"
           }
         },
         "roles": {
-          "description": "Current role for each player slot.",
+          "description": "Current role for each adventurer slot.",
           "type": "array",
           "items": {
-            "type": "string",
-            "enum": [
-              "unarmed",
-              "tank",
-              "dps",
-              "healer"
-            ]
-          }
-        },
-        "damage_done": {
-          "description": "Per-player monster damage dealt.",
-          "type": "array",
-          "items": {
-            "type": "integer",
-            "minimum": 0
-          }
-        },
-        "healing_done": {
-          "description": "Per-player healing applied to allies.",
-          "type": "array",
-          "items": {
-            "type": "integer",
-            "minimum": 0
-          }
-        },
-        "damage_blocked": {
-          "description": "Per-player damage prevented with tank guard.",
-          "type": "array",
-          "items": {
-            "type": "integer",
-            "minimum": 0
-          }
-        },
-        "messages_sent": {
-          "description": "Per-player public chat messages accepted by the server.",
-          "type": "array",
-          "items": {
-            "type": "integer",
-            "minimum": 0
+            "type": "string"
           }
         }
       }
     },
     "protocols": {
-      "player": "https://github.com/Metta-AI/bitworld/blob/master/docs/sprite_v1.md",
-      "global": "https://github.com/Metta-AI/bitworld/blob/master/docs/sprite_v1.md",
-      "adventure": "https://github.com/Metta-AI/coworld-tribal-fortress/blob/main/plan.md#adventure",
+      "player": "https://github.com/Metta-AI/coworld-tribal-quest/blob/main/plan.md",
+      "fortress_engine": "https://github.com/Metta-AI/coworld-tribal-fortress/blob/main/plan.md",
       "reward": "https://github.com/Metta-AI/bitworld/blob/master/docs/reward_v1.md"
     },
     "runnable": {
@@ -189,45 +129,22 @@
       "run": ["/bin/tribal_quest", "--address:0.0.0.0", "--port:8080"]
     }
   },
-  "player": [
-    {
-      "id": "konrad",
-      "name": "konrad",
-      "description": "Coworld player for tribal_quest.",
-      "runnable": {
-        "type": "player",
-        "image": "ghcr.io/metta-ai/coworld-tribal-quest-konrad:latest",
-        "run": ["/bin/konrad", "--address:host.docker.internal", "--port:2000"]
-      }
-    }
-  ],
+  "player": [],
   "variants": [
     {
       "id": "smoke",
       "name": "Smoke",
       "game_config": {
+        "worldRuntime": "fortress",
         "seed": 726896,
         "maxTicks": 300,
         "maxGames": 1
       },
-      "description": "Short deterministic tribal_quest configuration used for manifest checks."
+      "description": "Short deterministic Tribal Quest adventurer configuration used for manifest checks."
     }
   ],
   "certification": {
     "variant_id": "smoke",
-    "players": [
-      {
-        "player_id": "konrad",
-        "initial_params": {
-          "name": "slot_0"
-        }
-      },
-      {
-        "player_id": "konrad",
-        "initial_params": {
-          "name": "slot_1"
-        }
-      }
-    ]
+    "players": []
   }
 }
