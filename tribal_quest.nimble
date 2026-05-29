@@ -13,3 +13,4 @@ switch("path", "src")
 requires "nim >= 2.2.4"
 requires "bitworld >= 0.1.0"
 requires "jsony"
+requires "mummy >= 0.4.7"

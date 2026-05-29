@@ -4,6 +4,7 @@ import bitworld/protocol
 import jsony
 import tribal_village_engine
 import tribal_quest/fortress_engine
+import tribal_quest/player_surface
 
 type
   TribalQuestError = object of CatchableError
@@ -231,13 +232,13 @@ proc parseOptionInt(name, value: string): int =
       "Option --" & name & " must be an integer."
     )
 
-proc fortressEngineConfig(config: RunConfig): FortressEngineConfig =
+proc fortressEngineConfig(config: RunConfig): fortress_engine.FortressEngineConfig =
   ## Builds the required shared-engine config selected by the Quest run config.
-  result = defaultFortressEngineConfig()
+  result = fortress_engine.defaultFortressEngineConfig()
   result.adventurerRole = config.adventurerRole
   result.path = config.fortressEnginePath
   if result.path.strip().len == 0:
-    result.path = defaultFortressEnginePath()
+    result.path = fortress_engine.defaultFortressEnginePath()
 
 proc validate(config: RunConfig) =
   ## Raises when a run config value is outside the supported range.

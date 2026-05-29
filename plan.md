@@ -64,6 +64,10 @@ Quest is responsible for:
 - Quest scoring and replay output
 - Quest-specific docs and future reference bots
 
+The current Quest surface code lives in `src/tribal_quest/player_surface.nim`.
+It consumes `adventurerObservationJson` crops and packs them into the existing
+BitWorld 128 x 128 player frame protocol.
+
 Quest should not duplicate Fortress world simulation code.
 
 ## Action Contract
@@ -134,6 +138,6 @@ nim c --path:src --path:$BITWORLD_PATH/src --path:$BITWORLD_PATH --path:$TRIBAL_
 git diff --check
 ```
 
-Until Fortress lands `tribal_village_engine`, the build should fail immediately
-on that missing import. Do not revive local Quest simulation or add a Python
-bridge to make it pass.
+If `tribal_village_engine` is missing from the Fortress checkout, the build
+should fail immediately on that import. Do not revive local Quest simulation or
+add a Python bridge to make it pass.

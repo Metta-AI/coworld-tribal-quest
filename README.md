@@ -61,6 +61,8 @@ not a second runtime in this repo.
 ## Project Layout
 
 - `src/tribal_quest.nim` starts the Quest `/player` surface on Fortress.
+- `src/tribal_quest/player_surface.nim` owns the Quest `/player` websocket and
+  packs Fortress adventurer crops into BitWorld frames.
 - `src/tribal_quest/fortress_engine.nim` contains the Quest-side adapter
   contract.
 - `plan.md` is the integration source of truth for the Quest half.
