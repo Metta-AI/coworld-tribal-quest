@@ -27,6 +27,7 @@ const
   CogameResultsUriEnv = "COGAME_RESULTS_URI"
   CogameSaveReplayUriEnv = "COGAME_SAVE_REPLAY_URI"
   CogameLoadReplayUriEnv = "COGAME_LOAD_REPLAY_URI"
+  UnlimitedFortressMaxSteps = high(int)
 
 proc pathFromCogameUri(value, source: string): string =
   ## Converts a Coworld input URI into a local path.
@@ -240,6 +241,13 @@ proc fortressEngineConfig(config: RunConfig): fortress_engine.FortressEngineConf
   if result.path.strip().len == 0:
     result.path = fortress_engine.defaultFortressEnginePath()
 
+proc fortressMaxSteps(config: RunConfig): int =
+  ## Fortress's env has a finite default episode cap, so pass an explicit
+  ## practical infinity when Quest's dev host is configured as unlimited.
+  if config.maxTicks > 0:
+    return config.maxTicks
+  UnlimitedFortressMaxSteps
+
 proc validate(config: RunConfig) =
   ## Raises when a run config value is outside the supported range.
   if config.maxTicks < 0:
@@ -367,7 +375,7 @@ when isMainModule:
   let questEngineConfig = config.fortressEngineConfig()
   var engine = tribal_village_engine.initFortressEngine(
     tribal_village_engine.FortressEngineConfig(
-      maxSteps: config.maxTicks,
+      maxSteps: config.fortressMaxSteps(),
       seed: config.seed,
       adventurerViewRadius: QuestAdventureCropTiles div 2,
       aiMode: "hybrid",
