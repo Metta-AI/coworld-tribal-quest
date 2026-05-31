@@ -1,11 +1,11 @@
 import
   std/[json, locks, monotimes, os, sets, strutils, tables, times],
   mummy,
-  bitworld/client,
-  bitworld/protocol,
   tribal_village_engine,
+  tribal_quest/client,
   tribal_quest/fortress_engine,
   tribal_quest/gridworld_sprites,
+  tribal_quest/protocol,
   tribal_quest/sprite_packets
 
 const
@@ -121,6 +121,33 @@ proc parsePlayerProtocol(request: Request): int =
 
 proc playerClientHtml(protocol: QuestPlayerProtocol): string =
   result = readClientHtml(PlayerClientRoute)
+  result = result.replace(
+    "<canvas id=\"c\" width=\"128\" height=\"128\"></canvas>",
+    "<canvas id=\"c\" width=\"128\" height=\"128\" tabindex=\"0\" autofocus></canvas>"
+  )
+  result = result.replace(
+    "function release(){k={};sendMask(0,true)}",
+    "function release(){k={};sendMask(0,true)}" &
+      "function keyMask(){let h=0;" &
+      "h|=!z&&(k.ArrowUp||k.KeyW)?1:0;" &
+      "h|=!z&&(k.ArrowDown||k.KeyS)?2:0;" &
+      "h|=!z&&(k.ArrowLeft||k.KeyA)?4:0;" &
+      "h|=!z&&(k.ArrowRight||k.KeyD)?8:0;" &
+      "h|=!z&&(k.Space||k.KeyL)?16:0;" &
+      "h|=!z&&(k.KeyZ||k.KeyJ)?32:0;" &
+      "h|=!z&&(k.KeyX||k.KeyK)?64:0;" &
+      "return h&127}"
+  )
+  result = result.replace(
+    "fit();\nonkeydown=",
+    "fit();c.focus();\nonpointerdown=()=>c.focus();\nonkeydown="
+  )
+  result = result.replace(
+    "  k[e.code]=1\n};\nonkeyup=e=>{k[e.code]=0};",
+    "  if(e.code.startsWith(\"Arrow\"))e.preventDefault();\n" &
+      "  k[e.code]=1;sendMask(keyMask(),true)\n" &
+      "};\nonkeyup=e=>{k[e.code]=0;sendMask(keyMask(),true)};"
+  )
   if protocol == PlayerProtocolPixel:
     result = result.replace("m+\"/player\"", "m+\"/player?protocol=pixel\"")
 
@@ -192,18 +219,14 @@ proc handleQuestAdventurerHttp*(request: Request): bool {.gcsafe.} =
       request.respond(404, textHeaders(), "client not found\n")
     return
 
-  if request.path in [
-      SnappyClientRoute,
-      SnappyClientPath,
-      QrcodeClientRoute,
-      QrcodeClientPath
-    ] and request.httpMethod == "GET":
+  if request.path in [SnappyClientRoute, SnappyClientPath] and
+      request.httpMethod == "GET":
     result = true
     try:
       request.respond(
         200,
         textHeaders(clientStaticContentType(request.path)),
-        readFile(clientStaticPath(request.path))
+        clientStaticBody(request.path)
       )
     except IOError:
       request.respond(404, textHeaders(), "asset not found\n")
