@@ -4,6 +4,7 @@ import asyncdispatch
 import ws
 
 import tribal_quest/protocol
+import tribal_quest/sprite_packets
 
 type
   BotError = object of CatchableError
@@ -28,7 +29,7 @@ proc parseOptionInt(name, value: string): int =
 
 proc playerUrl(config: BotConfig): string =
   result = "ws://" & config.address & ":" & $config.port &
-    "/player?protocol=pixel&slot=" & $config.slot
+    "/player?slot=" & $config.slot
   if config.token.len > 0:
     result.add("&token=" & encodeUrl(config.token))
 
@@ -36,11 +37,6 @@ proc frameDigest(frame: string): uint32 =
   result = 2166136261'u32
   for ch in frame:
     result = (result xor uint32(ch.uint8)) * 16777619'u32
-
-proc nonZeroBytes(frame: string): int =
-  for ch in frame:
-    if ch != char(0):
-      inc result
 
 proc closeSocket(socket: WebSocket) =
   try:
@@ -79,17 +75,13 @@ proc runBot(config: BotConfig): Future[int] {.async.} =
   try:
     for tick in 0 ..< config.ticks:
       let mask = chooseMask(tick, stagnantFrames)
-      await socket.send(blobFromMask(mask), Binary)
+      await socket.send(spriteInputPacket(mask), Binary)
       inc sent
 
       let (opcode, frame) = await socket.receivePacket()
       if opcode != Binary:
         raise newException(BotError, "Expected binary frame from /player.")
-      if frame.len != ProtocolBytes:
-        raise newException(
-          BotError,
-          "Expected " & $ProtocolBytes & " frame bytes, got " & $frame.len & "."
-        )
+      let summary = parseSpritePacketSummary(frame)
 
       let digest = frame.frameDigest()
       if frames > 0 and digest == lastDigest:
@@ -98,7 +90,7 @@ proc runBot(config: BotConfig): Future[int] {.async.} =
         stagnantFrames = 0
       lastDigest = digest
 
-      if frame.nonZeroBytes() > 0:
+      if summary.viewportCount > 0 and summary.objectSpriteIds.len > 0:
         inc nonBlankFrames
       inc frames
   finally:

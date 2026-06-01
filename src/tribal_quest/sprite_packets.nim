@@ -115,14 +115,13 @@ proc toPacketString*(packet: openArray[uint8]): string =
     result[i] = char(byte)
 
 proc playerMaskFromPacket*(blob: string, mask: var uint8): bool =
-  ## Reads both old pixel input and sprite_v1 player input packets.
-  if blob.len == 2 and blob[0].uint8 in {0'u8, SpritePlayerInput}:
+  if blob.len == 2 and blob[0].uint8 == SpritePlayerInput:
     mask = blob[1].uint8 and 0x7f'u8
     return true
   false
 
 proc isTextInputPacket*(blob: string): bool =
-  blob.len > 0 and blob[0].uint8 in {1'u8, SpriteInputText}
+  blob.len > 0 and blob[0].uint8 == SpriteInputText
 
 proc rgbaTile*(
   width, height: int,

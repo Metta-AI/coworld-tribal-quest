@@ -1,6 +1,6 @@
 # Tribal Quest / Fortress Shared Engine Contract
 
-Last updated: 2026-05-29
+Last updated: 2026-06-01
 
 ## Canonical Shape
 
@@ -64,16 +64,14 @@ proc claimAdventurer*(engine: var FortressEngine, slot: int, teamId = -1): int
 proc releaseAdventurer*(engine: var FortressEngine, slot: int): bool
 proc submitAdventurerButtons*(engine: var FortressEngine, slot: int, mask: uint8)
 proc submitAdventurerAction*(engine: var FortressEngine, slot: int, action: uint16)
-proc submitAdventurerInput*(engine: var FortressEngine, slot: int, payloadJson: string)
 proc step*(engine: var FortressEngine)
 proc adventurerViewCells*(engine: var FortressEngine, slot: int, cells: var openArray[uint8]): FortressAdventurerView
-proc adventurerObservationJson*(engine: FortressEngine, slot: int): string
 ```
 
 That API owns worldgen, terrain, civilizations, NPC policies, claim tracking,
 action decoding, stepping, and local crop export.
-Quest should use the typed button and crop APIs in its live tick loop. The JSON
-input and observation APIs are compatibility/debug surfaces, not the hot path.
+Quest uses the typed button and crop APIs in its live tick loop. There is no
+JSON action or observation path in Quest.
 
 ## Quest Must Provide
 
@@ -95,8 +93,7 @@ It consumes the shared Fortress grid state and sends `sprite_v1` packets for
 `/client/player` through Quest's vendored player client. Terrain, resources,
 buildings, units, wildlife, and hostile entities are rendered as grid objects
 using the shared Fortress data asset keys. The old 128 x 128 packed-pixel
-protocol is retained only as `protocol=pixel` debug compatibility and
-`/client/pixel`.
+protocol is gone; `/player` is sprite-only.
 
 Quest should not duplicate Fortress world simulation code.
 
@@ -136,14 +133,7 @@ The canonical sprite client sends the `sprite_v1` player input packet:
 0x84 <button-mask>
 ```
 
-The JSON compatibility form is:
-
-```json
-{"type":"adventurer.buttons","buttons":33}
-```
-
-Button bits are Quest's vendored player mask contract, kept compatible with the
-historic Coworld/BitWorld values:
+Button bits are Quest's vendored player mask contract:
 
 - `up = 1`
 - `down = 2`
@@ -152,35 +142,7 @@ historic Coworld/BitWorld values:
 - `a = 32`
 - `b = 64`
 
-Tests may send raw engine actions:
-
-```json
-{"type":"adventurer.action","action":28}
-```
-
 Fortress owns decoding masks into move, attack, use, and future role abilities.
-
-## Observation Contract
-
-`adventurerObservationJson(engine, slot)` returns a JSON object with stable
-fields Quest can parse:
-
-- `type = "engine.adventurer_observation"`
-- `control_profile = "Adventurer"`
-- `slot`
-- `agent_id`
-- `team_id`
-- `civilization`
-- `position`
-- `hp`
-- `max_hp`
-- `done`
-- `view_plane`
-- `sprite_view`
-- `observation`
-
-`view_plane` and `sprite_view` are local adventurer-centered crops. They are not
-full-map payloads.
 
 ## Rendering Contract
 
@@ -205,13 +167,11 @@ parallel Quest simulation.
 
 ## Defaults
 
-- world runtime: `fortress`
 - world size: `768 x 480`
 - town agents per team: `200`
 - adventurer slots: `64`
 - Quest adventurer crop: `21 x 21`
 - Quest sprite tile size: `16 px`
-- default adventurer role: `adventurer`
 
 ## Validation
 

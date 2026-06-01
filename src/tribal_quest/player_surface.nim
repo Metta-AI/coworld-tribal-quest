@@ -5,28 +5,25 @@ import
   tribal_quest/client,
   tribal_quest/fortress_engine,
   tribal_quest/gridworld_sprites,
-  tribal_quest/protocol,
   tribal_quest/sprite_packets
 
 const
   PlayerSocketPath = "/player"
   StepMilliseconds = 100
-  QuestViewCells = QuestAdventureCropTiles * QuestAdventureCropTiles
-  PixelClientRoute = "/client/pixel"
-
-type
-  QuestPlayerProtocol = enum
-    PlayerProtocolSprite
-    PlayerProtocolPixel
 
 type
   QuestPlayerFrame* = tuple[websocket: WebSocket, frame: string]
 
   ViewerState = object
     slot: int
+    name: string
     lastMask: uint8
-    protocol: QuestPlayerProtocol
+    survivalTicks: int
     knownSprites: HashSet[int]
+
+  PlayerScore = object
+    name: string
+    survivalTicks: int
 
   SurfaceState = object
     lock: Lock
@@ -34,6 +31,7 @@ type
     tokens: seq[string]
     viewers: Table[WebSocket, ViewerState]
     closedSockets: seq[WebSocket]
+    completedScores: seq[PlayerScore]
     spriteRegistry: QuestSpriteRegistry
 
   ServerThreadArgs = object
@@ -110,16 +108,12 @@ proc claimViewerSlot(request: Request): int =
   if surface.engine.isNil or result < 0 or result >= surface.engine[].adventurerSlots:
     return -1
 
-proc parsePlayerProtocol(request: Request): int =
-  case request.queryValue("protocol").strip().toLowerAscii()
-  of "", "sprite", "sprite-v1", "sprite_v1":
-    ord(PlayerProtocolSprite)
-  of "pixel", "bitscreen", "bitscreen-v1", "bitscreen_v1":
-    ord(PlayerProtocolPixel)
-  else:
-    -1
+proc viewerName(request: Request, slot: int): string =
+  result = request.queryValue("name").strip()
+  if result.len == 0:
+    result = "adventurer_" & $slot
 
-proc playerClientHtml(protocol: QuestPlayerProtocol): string =
+proc playerClientHtml(): string =
   result = readClientHtml(PlayerClientRoute)
   result = result.replace(
     "<canvas id=\"c\" width=\"128\" height=\"128\"></canvas>",
@@ -148,8 +142,6 @@ proc playerClientHtml(protocol: QuestPlayerProtocol): string =
       "  k[e.code]=1;sendMask(keyMask(),true)\n" &
       "};\nonkeyup=e=>{k[e.code]=0;sendMask(keyMask(),true)};"
   )
-  if protocol == PlayerProtocolPixel:
-    result = result.replace("m+\"/player\"", "m+\"/player?protocol=pixel\"")
 
 proc upgradeRequiredHeaders(): HttpHeaders =
   result = textHeaders()
@@ -175,9 +167,12 @@ proc handleQuestAdventurerHttp*(request: Request): bool {.gcsafe.} =
         "websocket upgrade required\n"
       )
       return
-    let protocolIndex = request.parsePlayerProtocol()
-    if protocolIndex < 0:
-      request.respond(400, textHeaders(), "invalid player protocol\n")
+    if request.queryValue("protocol").len > 0:
+      request.respond(
+        400,
+        textHeaders(),
+        "protocol query is not supported; /player is sprite_v1\n"
+      )
       return
     {.gcsafe.}:
       withLock surface.lock:
@@ -195,25 +190,21 @@ proc handleQuestAdventurerHttp*(request: Request): bool {.gcsafe.} =
         let websocket = request.upgradeToWebSocket()
         surface.viewers[websocket] = ViewerState(
           slot: slot,
+          name: request.viewerName(slot),
           lastMask: 0,
-          protocol: QuestPlayerProtocol(protocolIndex),
+          survivalTicks: 0,
           knownSprites: initHashSet[int]()
         )
     return
 
-  if request.path in [PlayerClientRoute, PlayerClientHtmlRoute, PixelClientRoute] and
+  if request.path in [PlayerClientRoute, PlayerClientHtmlRoute] and
       request.httpMethod == "GET":
     result = true
     try:
-      let protocol =
-        if request.path == PixelClientRoute:
-          PlayerProtocolPixel
-        else:
-          PlayerProtocolSprite
       request.respond(
         200,
         textHeaders(clientStaticContentType(request.path)),
-        playerClientHtml(protocol)
+        playerClientHtml()
       )
     except IOError:
       request.respond(404, textHeaders(), "client not found\n")
@@ -235,6 +226,11 @@ proc handleQuestAdventurerHttp*(request: Request): bool {.gcsafe.} =
   if request.path == "/" and request.httpMethod == "GET":
     result = true
     request.respond(200, textHeaders(), "Tribal Quest Fortress player surface\n")
+    return
+
+  if request.path == "/healthz" and request.httpMethod == "GET":
+    result = true
+    request.respond(200, textHeaders(), "ok\n")
 
 proc httpHandler(request: Request) {.gcsafe.} =
   if not handleQuestAdventurerHttp(request):
@@ -275,33 +271,17 @@ proc websocketHandler(
 proc serverThreadProc(args: ServerThreadArgs) {.thread.} =
   args.server[].serve(Port(args.port), args.address)
 
-proc frameFromEngine(engine: var FortressEngine, slot: int): string =
-  result = newString(ProtocolBytes)
-  var cells: array[QuestViewCells, uint8]
-  let view = engine.adventurerViewCells(slot, cells)
-  if not view.ok or view.done or view.width <= 0 or view.height <= 0:
-    return
-
-  var outIndex = 0
-  for py in 0 ..< ScreenHeight:
-    let
-      cellY = min(view.height - 1, py * view.height div ScreenHeight)
-      rowStart = cellY * view.width
-    var px = 0
-    while px < ScreenWidth:
-      let
-        cellX0 = min(view.width - 1, px * view.width div ScreenWidth)
-        cellX1 = min(view.width - 1, (px + 1) * view.width div ScreenWidth)
-        lo = cells[rowStart + cellX0] and 0x0f
-        hi = cells[rowStart + cellX1] and 0x0f
-      result[outIndex] = char(lo or (hi shl 4))
-      inc outIndex
-      px += 2
+proc rememberScore(viewer: ViewerState) =
+  surface.completedScores.add(PlayerScore(
+    name: viewer.name,
+    survivalTicks: viewer.survivalTicks
+  ))
 
 proc pruneClosedViewers() =
   for websocket in surface.closedSockets:
     if websocket in surface.viewers:
       let slot = surface.viewers[websocket].slot
+      surface.viewers[websocket].rememberScore()
       surface.viewers.del(websocket)
       var slotStillViewed = false
       for _, viewer in surface.viewers.pairs:
@@ -329,16 +309,12 @@ proc buildQuestAdventurerFrames*(): seq[QuestPlayerFrame] =
   withLock surface.lock:
     pruneClosedViewers()
     for websocket, viewer in surface.viewers.mpairs:
-      let frame =
-        case viewer.protocol
-        of PlayerProtocolSprite:
-          surface.engine[].buildAdventurerSpriteFrame(
-            viewer.slot,
-            surface.spriteRegistry,
-            viewer.knownSprites
-          )
-        of PlayerProtocolPixel:
-          surface.engine[].frameFromEngine(viewer.slot)
+      let frame = surface.engine[].buildAdventurerSpriteFrame(
+        viewer.slot,
+        surface.spriteRegistry,
+        viewer.knownSprites
+      )
+      inc viewer.survivalTicks
       result.add((
         websocket: websocket,
         frame: frame
@@ -371,6 +347,29 @@ proc writeJsonFile(path: string, node: JsonNode) =
   if path.len > 0:
     writeFile(path, $node)
 
+proc scoresJson(ticks: int): JsonNode =
+  var
+    names = newJArray()
+    scores = newJArray()
+    survivalTicks = newJArray()
+  withLock surface.lock:
+    for score in surface.completedScores:
+      names.add(%score.name)
+      scores.add(%score.survivalTicks)
+      survivalTicks.add(%score.survivalTicks)
+    for _, viewer in surface.viewers.pairs:
+      names.add(%viewer.name)
+      scores.add(%viewer.survivalTicks)
+      survivalTicks.add(%viewer.survivalTicks)
+  %*{
+    "runtime": "fortress",
+    "ticks": ticks,
+    "names": names,
+    "scores": scores,
+    "survival_ticks": survivalTicks,
+    "adventurer_slots": surface.engine[].adventurerSlots
+  }
+
 proc runLoop(): int =
   var previousTick = getMonoTime()
   while surface.engine[].maxSteps <= 0 or surface.engine[].tick < surface.engine[].maxSteps:
@@ -393,6 +392,7 @@ proc initQuestAdventurerSurface*(
   surface.tokens = tokens
   surface.viewers = initTable[WebSocket, ViewerState]()
   surface.closedSockets = @[]
+  surface.completedScores = @[]
   surface.spriteRegistry = initQuestSpriteRegistry()
 
 proc runQuestPlayerSurface*(
@@ -400,15 +400,11 @@ proc runQuestPlayerSurface*(
   address: string,
   port: int,
   saveReplayPath: string,
-  loadReplayPath: string,
   saveScoresPath: string,
   tokens: seq[string],
-  maxGames: int,
-  adventurerRole: string
+  maxGames: int
 ) =
-  discard loadReplayPath
   discard maxGames
-  discard adventurerRole
   initQuestAdventurerSurface(engine, tokens)
 
   let httpServer = newServer(
@@ -431,11 +427,7 @@ proc runQuestPlayerSurface*(
   let ticks = runLoop()
   httpServer.close()
   joinThread(serverThread)
-  writeJsonFile(saveScoresPath, %*{
-    "runtime": "fortress",
-    "ticks": ticks,
-    "adventurer_slots": engine.adventurerSlots
-  })
+  writeJsonFile(saveScoresPath, scoresJson(ticks))
   writeJsonFile(saveReplayPath, %*{
     "runtime": "fortress",
     "ticks": ticks

@@ -3,8 +3,8 @@
 Tribal Quest is the adventurer Coworld surface for the shared Tribal Fortress
 world. [plan.md](plan.md) is the canonical contract for the integration.
 
-There is no supported local Quest simulation mode anymore. `worldRuntime` is
-always `fortress`, and missing Fortress Nim engine code should fail at build or
+There is no supported local Quest simulation mode anymore. Quest always runs on
+the Fortress Nim engine, and missing Fortress code should fail at build or
 startup instead of falling back to an old route. There is no Python bridge and
 no production `/adventure` route.
 
@@ -36,10 +36,6 @@ Open:
 uses the shared Fortress terrain/entity state and renders `sprite_v1` packets
 through Quest's vendored player client centered on the controlled adventurer.
 
-The old packed-pixel stream is debug compatibility only:
-
-- `http://127.0.0.1:2000/client/pixel?slot=0&name=human&reconnect=2`
-
 Or run the bundled Nim adventurer pilot against the same `/player` route:
 
 ```sh
@@ -58,9 +54,7 @@ Optional config fields:
 
 ```json
 {
-  "worldRuntime": "fortress",
-  "fortressEnginePath": "../coworld-tribal-fortress",
-  "adventurerRole": "adventurer"
+  "fortressEnginePath": "../coworld-tribal-fortress"
 }
 ```
 
@@ -68,7 +62,6 @@ Optional config fields:
 
 `src/tribal_quest/fortress_engine.nim` keeps the Quest-owned adapter contract:
 
-- validates that only `worldRuntime = fortress` is accepted
 - discovers `TRIBAL_FORTRESS_PATH` or `../coworld-tribal-fortress`
 - fails fast unless that checkout exposes `src/tribal_village_engine.nim`
 - targets a 768 by 480 Fortress world with 200 town agents per team

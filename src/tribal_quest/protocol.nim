@@ -1,12 +1,4 @@
 const
-  ScreenWidth* = 128
-  ScreenHeight* = 128
-  ProtocolBytes* = (ScreenWidth * ScreenHeight) div 2
-
-  PacketInput* = 0'u8
-  PacketChat* = 1'u8
-  InputPacketBytes* = 2
-
   DefaultHost* = "localhost"
   DefaultPort* = 8080
 
@@ -23,8 +15,7 @@ proc blobFromBytes*(bytes: openArray[uint8]): string =
   for i, value in bytes:
     result[i] = char(value)
 
-proc blobFromMask*(mask: uint8): string =
-  ## Builds the legacy two-byte button packet accepted by /client/pixel.
-  result = newString(InputPacketBytes)
-  result[0] = char(PacketInput)
-  result[1] = char(mask)
+proc spriteInputPacket*(mask: uint8): string =
+  result = newString(2)
+  result[0] = char(0x84'u8)
+  result[1] = char(mask and 0x7f'u8)

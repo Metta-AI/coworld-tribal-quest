@@ -17,16 +17,13 @@ type
     maxGames: int
     tokens: seq[string]
     fortressEnginePath: string
-    adventurerRole: string
     saveReplayPath: string
-    loadReplayPath: string
     saveScoresPath: string
 
 const
   CogameConfigUriEnv = "COGAME_CONFIG_URI"
   CogameResultsUriEnv = "COGAME_RESULTS_URI"
   CogameSaveReplayUriEnv = "COGAME_SAVE_REPLAY_URI"
-  CogameLoadReplayUriEnv = "COGAME_LOAD_REPLAY_URI"
   UnlimitedFortressMaxSteps = high(int)
 
 proc pathFromCogameUri(value, source: string): string =
@@ -100,28 +97,9 @@ proc readConfigInt(node: JsonNode, name: string, value: var int) =
     )
   value = item.getInt()
 
-proc readConfigWorldRuntime(node: JsonNode, name: string) =
-  ## Reads the optional runtime field, which may only select fortress mode.
-  if not node.hasKey(name):
-    return
-  let item = node[name]
-  if item.kind != JString:
-    raise newException(
-      TribalQuestError,
-      "Config field " & name & " must be a string."
-    )
-  try:
-    item.getStr().validateWorldRuntime()
-  except ValueError as e:
-    raise newException(TribalQuestError, e.msg)
-
 proc defaultReplayPath(): string =
   ## Returns the configured replay save path from the environment.
   pathFromCogameEnv(CogameSaveReplayUriEnv)
-
-proc defaultLoadReplayPath(): string =
-  ## Returns the configured replay load path from the environment.
-  pathFromCogameEnv(CogameLoadReplayUriEnv)
 
 proc defaultScoresPath(): string =
   ## Returns the configured score save path from the environment.
@@ -134,31 +112,11 @@ proc isKnownConfigField(name: string): bool =
       "port",
       "seed",
       "maxTicks",
-      "max-ticks",
       "maxGames",
-      "max-games",
       "tokens",
-      "worldRuntime",
-      "world-runtime",
-      "world_runtime",
       "fortressEnginePath",
-      "fortress-engine-path",
-      "fortress_engine_path",
-      "adventurerRole",
-      "adventurer-role",
-      "adventurer_role",
-      "saveReplay",
-      "loadReplay",
-      "saveScores",
       "saveReplayPath",
-      "loadReplayPath",
-      "saveScoresPath",
-      "save-replay",
-      "load-replay",
-      "save-scores",
-      "save-replay-path",
-      "load-replay-path",
-      "save-scores-path":
+      "saveScoresPath":
     true
   else:
     false
@@ -184,35 +142,15 @@ proc update(config: var RunConfig, jsonText: string) =
   if node.kind != JObject:
     raise newException(TribalQuestError, "Config must be a JSON object.")
   node.validateConfigFields()
-  node.readConfigWorldRuntime("worldRuntime")
-  node.readConfigWorldRuntime("world-runtime")
-  node.readConfigWorldRuntime("world_runtime")
   node.readConfigString("address", config.address)
   node.readConfigInt("port", config.port)
-  node.readConfigString("saveReplay", config.saveReplayPath)
-  node.readConfigString("loadReplay", config.loadReplayPath)
-  node.readConfigString("saveScores", config.saveScoresPath)
   node.readConfigString("saveReplayPath", config.saveReplayPath)
-  node.readConfigString("loadReplayPath", config.loadReplayPath)
   node.readConfigString("saveScoresPath", config.saveScoresPath)
-  node.readConfigString("save-replay", config.saveReplayPath)
-  node.readConfigString("load-replay", config.loadReplayPath)
-  node.readConfigString("save-scores", config.saveScoresPath)
-  node.readConfigString("save-replay-path", config.saveReplayPath)
-  node.readConfigString("load-replay-path", config.loadReplayPath)
-  node.readConfigString("save-scores-path", config.saveScoresPath)
   node.readConfigInt("seed", config.seed)
   node.readConfigInt("maxTicks", config.maxTicks)
-  node.readConfigInt("max-ticks", config.maxTicks)
   node.readConfigInt("maxGames", config.maxGames)
-  node.readConfigInt("max-games", config.maxGames)
   node.readConfigStrings("tokens", config.tokens)
   node.readConfigString("fortressEnginePath", config.fortressEnginePath)
-  node.readConfigString("fortress-engine-path", config.fortressEnginePath)
-  node.readConfigString("fortress_engine_path", config.fortressEnginePath)
-  node.readConfigString("adventurerRole", config.adventurerRole)
-  node.readConfigString("adventurer-role", config.adventurerRole)
-  node.readConfigString("adventurer_role", config.adventurerRole)
 
 proc requireOptionValue(name, value: string) =
   ## Raises when a CLI option is missing its value.
@@ -236,7 +174,6 @@ proc parseOptionInt(name, value: string): int =
 proc fortressEngineConfig(config: RunConfig): fortress_engine.FortressEngineConfig =
   ## Builds the required shared-engine config selected by the Quest run config.
   result = fortress_engine.defaultFortressEngineConfig()
-  result.adventurerRole = config.adventurerRole
   result.path = config.fortressEnginePath
   if result.path.strip().len == 0:
     result.path = fortress_engine.defaultFortressEnginePath()
@@ -268,8 +205,6 @@ proc validate(config: RunConfig) =
 proc echoStartupPaths(config: RunConfig) =
   ## Prints configured runtime, replay, and score output paths.
   let engineConfig = config.fortressEngineConfig()
-  if config.loadReplayPath.len > 0:
-    echo "Loading replay file: " & config.loadReplayPath
   if config.saveReplayPath.len > 0:
     echo "Writing replay file: " & config.saveReplayPath
   else:
@@ -288,7 +223,6 @@ proc echoStartupPaths(config: RunConfig) =
     $engineConfig.worldHeight & " tiles"
   echo "NPC town agent cap: " & $engineConfig.townAgentsPerTeam
   echo "Adventurer slots: " & $engineConfig.adventurerSlots
-  echo "Default adventurer role: " & config.adventurerRole
   if config.maxTicks > 0:
     echo "Max ticks: " & $config.maxTicks
   else:
@@ -308,9 +242,7 @@ when isMainModule:
       maxGames: DefaultMaxGames,
       tokens: @[],
       fortressEnginePath: "",
-      adventurerRole: "adventurer",
       saveReplayPath: defaultReplayPath(),
-      loadReplayPath: defaultLoadReplayPath(),
       saveScoresPath: defaultScoresPath()
     )
     configPath = pathFromCogameEnv(CogameConfigUriEnv)
@@ -326,29 +258,17 @@ when isMainModule:
         config.port = key.parseOptionInt(val)
       of "seed":
         config.seed = key.parseOptionInt(val)
-      of "max-ticks", "maxTicks":
+      of "max-ticks":
         config.maxTicks = key.parseOptionInt(val)
-      of "max-games", "maxGames":
+      of "max-games":
         config.maxGames = key.parseOptionInt(val)
-      of "world-runtime", "worldRuntime":
-        key.requireOptionValue(val)
-        try:
-          val.validateWorldRuntime()
-        except ValueError as e:
-          raise newException(TribalQuestError, e.msg)
-      of "fortress-engine-path", "fortressEnginePath":
+      of "fortress-engine-path":
         key.requireOptionValue(val)
         config.fortressEnginePath = val
-      of "adventurer-role", "adventurerRole":
-        key.requireOptionValue(val)
-        config.adventurerRole = val
-      of "save-replay", "save-replay-path", "saveReplayPath":
+      of "save-replay":
         key.requireOptionValue(val)
         config.saveReplayPath = val
-      of "load-replay", "load-replay-path", "loadReplayPath":
-        key.requireOptionValue(val)
-        config.loadReplayPath = val
-      of "save-scores", "save-scores-path", "saveScoresPath":
+      of "save-scores":
         key.requireOptionValue(val)
         config.saveScoresPath = val
       of "config":
@@ -392,11 +312,9 @@ when isMainModule:
       address = config.address,
       port = config.port,
       saveReplayPath = config.saveReplayPath,
-      loadReplayPath = config.loadReplayPath,
       saveScoresPath = config.saveScoresPath,
       tokens = config.tokens,
-      maxGames = config.maxGames,
-      adventurerRole = questEngineConfig.adventurerRole
+      maxGames = config.maxGames
     )
   finally:
     engine.close()

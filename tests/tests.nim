@@ -14,30 +14,14 @@ template expectValueError(body: untyped, message: string) =
     rejected = true
   doAssert rejected, message
 
-proc testFortressRuntimeIsRequired() =
-  validateWorldRuntime("fortress")
-  validateWorldRuntime("fortress-engine")
-  validateWorldRuntime("fortress_engine")
-
-  expectValueError(validateWorldRuntime(""), "empty runtime must not be accepted")
-  expectValueError(validateWorldRuntime("local"), "local runtime must be rejected")
-  expectValueError(validateWorldRuntime("quest"), "unknown runtime must be rejected")
-
 proc testAdventurerInputPayloads() =
   let mask = ButtonUp or ButtonRight or ButtonA
-  let input = parseJson(adventurerInputJson(mask))
-  doAssert input["type"].getStr() == AdventurerButtonsType
-  doAssert input["buttons"].getInt() == int(mask)
-
-  let raw = parseJson(adventurerRawActionJson(17))
-  doAssert raw["type"].getStr() == AdventurerActionType
-  doAssert raw["action"].getInt() == 17
-
   var parsedMask: uint8
   doAssert playerMaskFromPacket("\x84" & char(mask), parsedMask)
   doAssert parsedMask == mask
-  doAssert playerMaskFromPacket(blobFromMask(mask), parsedMask)
+  doAssert playerMaskFromPacket(spriteInputPacket(mask), parsedMask)
   doAssert parsedMask == mask
+  doAssert not playerMaskFromPacket("\x00" & char(mask), parsedMask)
 
 proc testSpritePacketConstruction() =
   var
@@ -74,55 +58,9 @@ proc testGeneratedSpritePlaceholder() =
       inc nonTransparent
   doAssert nonTransparent > 0
 
-proc testAdventurerObservationParsing() =
-  let observation = parseFortressAdventurerObservation($(%*{
-    "agent_id": 42,
-    "team_id": 2,
-    "civilization": "Elf",
-    "role": "scout",
-    "position": {"x": 13, "y": 17},
-    "hp": 5,
-    "max_hp": 9,
-    "status": "ready",
-    "view_plane": {
-      "origin": {"x": 8, "y": 12},
-      "width": QuestAdventureCropTiles,
-      "height": QuestAdventureCropTiles
-    }
-  }))
-  doAssert observation.agentId == 42
-  doAssert observation.teamId == 2
-  doAssert observation.civilization == "Elf"
-  doAssert observation.role == "scout"
-  doAssert observation.x == 13 and observation.y == 17
-  doAssert observation.hp == 5 and observation.maxHp == 9
-  doAssert observation.status == "ready"
-  doAssert observation.originX == 8 and observation.originY == 12
-  doAssert observation.cropWidth == QuestAdventureCropTiles
-  doAssert observation.cropHeight == QuestAdventureCropTiles
-
-  let legacyCrop = parseFortressAdventurerObservation($(%*{
-    "agentId": 5,
-    "teamId": 1,
-    "x": 20,
-    "y": 21,
-    "crop": {
-      "origin_x": 15,
-      "origin_y": 16,
-      "width": 7,
-      "height": 9
-    }
-  }))
-  doAssert legacyCrop.agentId == 5
-  doAssert legacyCrop.teamId == 1
-  doAssert legacyCrop.x == 20 and legacyCrop.y == 21
-  doAssert legacyCrop.originX == 15 and legacyCrop.originY == 16
-  doAssert legacyCrop.cropWidth == 7 and legacyCrop.cropHeight == 9
-
 proc testFortressEngineConfigValidation() =
   let config = defaultFortressEngineConfig()
   doAssert config.path.len == 0
-  doAssert config.adventurerRole == "adventurer"
   doAssert config.worldWidth == FortressWorldWidthTiles
   doAssert config.worldHeight == FortressWorldHeightTiles
   doAssert config.townAgentsPerTeam == FortressTownAgentsPerTeam
@@ -158,12 +96,20 @@ proc testDefaultFortressPath() =
   let expected = RootDir / DefaultFortressCheckoutDir
   doAssert defaultFortressEnginePath(RootDir) == expected
 
+proc testManifestHasNoRuntimeSelector() =
+  let
+    manifest = parseJson(readFile(RootDir / "coworld_manifest.json"))
+    properties = manifest["game"]["config_schema"]["properties"]
+    smokeConfig = manifest["variants"][0]["game_config"]
+  doAssert not properties.hasKey("worldRuntime")
+  doAssert not properties.hasKey("adventurerRole")
+  doAssert not smokeConfig.hasKey("worldRuntime")
+
 when isMainModule:
-  testFortressRuntimeIsRequired()
   testAdventurerInputPayloads()
   testSpritePacketConstruction()
   testGeneratedSpritePlaceholder()
-  testAdventurerObservationParsing()
   testFortressEngineConfigValidation()
   testDefaultFortressPath()
+  testManifestHasNoRuntimeSelector()
   echo "All tests passed"

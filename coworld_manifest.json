@@ -24,23 +24,10 @@
           },
           "default": []
         },
-        "worldRuntime": {
-          "description": "Only supported runtime. Quest always runs its /player adventurer surface on the installed Tribal Fortress engine.",
-          "type": "string",
-          "enum": [
-            "fortress"
-          ],
-          "default": "fortress"
-        },
         "fortressEnginePath": {
           "description": "Local path to a coworld-tribal-fortress checkout or package. If empty, TRIBAL_FORTRESS_PATH or ../coworld-tribal-fortress is used.",
           "type": "string",
           "default": ""
-        },
-        "adventurerRole": {
-          "description": "Default adventurer role string requested when Quest binds /player slots into the Fortress engine.",
-          "type": "string",
-          "default": "adventurer"
         },
         "seed": {
           "description": "Random seed.",
@@ -108,20 +95,18 @@
           "items": {
             "type": "string"
           }
-        },
-        "roles": {
-          "description": "Current role for each adventurer slot.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
         }
       }
     },
     "protocols": {
-      "player": "https://github.com/Metta-AI/coworld-tribal-quest/blob/main/plan.md",
-      "fortress_engine": "https://github.com/Metta-AI/coworld-tribal-fortress/blob/main/plan.md",
-      "reward": "https://github.com/Metta-AI/bitworld/blob/master/docs/reward_v1.md"
+      "player": {
+        "type": "uri",
+        "value": "https://github.com/Metta-AI/coworld-tribal-quest/blob/main/plan.md"
+      },
+      "engine_runtime": {
+        "type": "uri",
+        "value": "https://github.com/Metta-AI/coworld-tribal-fortress/blob/main/tribal_village_env/coworld/docs/engine_runtime_contract.md"
+      }
     },
     "runnable": {
       "type": "game",
@@ -130,22 +115,11 @@
     }
   },
   "player": [],
-  "grader": [
-    {
-      "id": "bitworld-score-grader",
-      "name": "BitWorld Score Grader",
-      "type": "grader",
-      "description": "Generic BitWorld grader that scores episode interest from score spread and game-specific activity signals.",
-      "source_url": "https://github.com/Metta-AI/graders/tree/main/graders/bitworld_score/bitworld_score_grader",
-      "image": "ghcr.io/metta-ai/graders-bitworld-score:latest"
-    }
-  ],
   "variants": [
     {
       "id": "smoke",
       "name": "Smoke",
       "game_config": {
-        "worldRuntime": "fortress",
         "seed": 726896,
         "maxTicks": 300,
         "maxGames": 1
