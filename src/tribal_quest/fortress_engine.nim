@@ -6,7 +6,7 @@ const
   FortressWorldWidthTiles* = 768
   FortressWorldHeightTiles* = 480
   FortressTownTokenSlots* = 8
-  FortressTownAgentsPerTeam* = 30
+  FortressTownAgentsPerTeam* = 200
   FortressAdventurerSlots* = 64
   QuestAdventureCropTiles* = 21
   QuestSpriteTilePixels* = 16

@@ -71,7 +71,7 @@ Optional config fields:
 - validates that only `worldRuntime = fortress` is accepted
 - discovers `TRIBAL_FORTRESS_PATH` or `../coworld-tribal-fortress`
 - fails fast unless that checkout exposes `src/tribal_village_engine.nim`
-- targets a 768 by 480 Fortress world with 30 town agents per team
+- targets a 768 by 480 Fortress world with 200 town agents per team
 - caps Quest adventurer slots at 64
 - forwards button masks through the typed Fortress engine API
 - renders the local adventurer grid as `sprite_v1` packets without JSON

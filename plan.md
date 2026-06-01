@@ -207,7 +207,7 @@ parallel Quest simulation.
 
 - world runtime: `fortress`
 - world size: `768 x 480`
-- town agents per team: `30`
+- town agents per team: `200`
 - adventurer slots: `64`
 - Quest adventurer crop: `21 x 21`
 - Quest sprite tile size: `16 px`

@@ -2,6 +2,7 @@ import std/[os, sets, strutils, tables]
 
 import pixie
 import environment
+import quest_monsters
 import tribal_village_engine
 import types
 
@@ -61,42 +62,19 @@ proc terrainSpriteKeyLocal(terrain: TerrainType): string =
 proc thingSpriteKeyLocal(kind: ThingKind): string =
   thingSpriteKey(kind)
 
-when declared(QuestMonster):
-  proc questMonsterSpeciesName(thing: Thing): string =
-    when compiles(thing.questMonsterSpecies):
-      $thing.questMonsterSpecies
-    else:
-      ""
+proc questMonsterSpriteKeyLocal(species: QuestMonsterSpecies): string =
+  let key = questMonsterInfo(species).assetKey
+  if key.len > 0:
+    key
+  else:
+    questMonsterSpriteBase(species)
 
-  proc questMonsterSpriteKeyLocal(speciesName: string): string =
-    let lower = speciesName.toLowerAscii()
-    if "goblin" in lower:
-      "oriented/goblin"
-    elif "slime" in lower or "scorpion" in lower or "burrower" in lower or
-        "scarab" in lower or "leech" in lower:
-      "oriented/tumor"
-    elif "wraith" in lower or "mender" in lower or "witch" in lower or
-        "shaman" in lower or "seer" in lower or "necromancer" in lower:
-      "skeleton"
-    elif "bear" in lower or "boar" in lower or "buck" in lower or
-        "yeti" in lower or "troll" in lower or "maw" in lower or
-        "titan" in lower:
-      "oriented/bear"
-    else:
-      "oriented/wolf"
-
-  proc questMonsterLabelLocal(speciesName: string): string =
-    result = speciesName
-    if result.startsWith("QuestMonster"):
-      result = result["QuestMonster".len .. ^1]
-    if result.len == 0 or result == "None":
-      return "quest monster"
-    var label = newStringOfCap(result.len + 4)
-    for i, ch in result:
-      if i > 0 and ch.isUpperAscii():
-        label.add(' ')
-      label.add(ch.toLowerAscii())
-    result = label
+proc questMonsterLabelLocal(species: QuestMonsterSpecies): string =
+  let label = questMonsterInfo(species).label
+  if label.len > 0:
+    label
+  else:
+    "quest monster"
 
 proc unitSpriteBase(unitClass: AgentUnitClass, agentId: int, packed: bool): string =
   case unitClass
@@ -274,8 +252,6 @@ proc terrainBaseColor(terrain: TerrainType): tuple[r, g, b, a: uint8] =
     (r: 145'u8, g: 55'u8, b: 35'u8, a: 255'u8)
   of Mountain:
     (r: 118'u8, g: 112'u8, b: 96'u8, a: 255'u8)
-  of RampUpN, RampUpS, RampUpW, RampUpE, RampDownN, RampDownS, RampDownW, RampDownE:
-    (r: 142'u8, g: 124'u8, b: 86'u8, a: 255'u8)
   else:
     (r: 154'u8, g: 140'u8, b: 86'u8, a: 255'u8)
 
@@ -309,14 +285,12 @@ proc spriteForThing(
       "unit " & $thing.unitClass,
       thing.orientation
     )
-  when declared(QuestMonster):
-    if thing.kind == QuestMonster:
-      let speciesName = thing.questMonsterSpeciesName()
-      return registry.spriteForAsset(
-        questMonsterSpriteKeyLocal(speciesName),
-        questMonsterLabelLocal(speciesName),
-        thing.orientation
-      )
+  if thing.kind == QuestMonster:
+    return registry.spriteForAsset(
+      questMonsterSpriteKeyLocal(thing.questMonsterSpecies),
+      questMonsterLabelLocal(thing.questMonsterSpecies),
+      thing.orientation
+    )
   registry.spriteForAsset(thingSpriteKeyLocal(thing.kind), "thing " & $thing.kind, thing.orientation)
 
 proc addCellObject(
