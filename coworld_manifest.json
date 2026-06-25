@@ -103,10 +103,7 @@
         "type": "uri",
         "value": "https://github.com/Metta-AI/coworld-tribal-quest/blob/main/plan.md"
       },
-      "engine_runtime": {
-        "type": "uri",
-        "value": "https://github.com/Metta-AI/coworld-tribal-fortress/blob/main/tribal_village_env/coworld/docs/engine_runtime_contract.md"
-      }
+      "engine_runtime": "nimgrid"
     },
     "runnable": {
       "type": "game",
