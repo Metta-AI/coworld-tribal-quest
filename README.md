@@ -1,5 +1,20 @@
 # Tribal Quest
 
+<!-- COWORLD-REPO-STATUS:START -->
+> [!NOTE]
+> Coworld repo status: **incomplete** (`coworld-incomplete`).
+> Canonical repository: `Metta-AI/coworld-tribal-quest`.
+> Manifest path: `coworld_manifest.json`.
+> Build path: `Dockerfile`
+> Certification: blocked until `uv run coworld certify coworld_manifest.json` passes and the result is recorded.
+>
+> Missing pieces:
+> - [ ] Validate the root concrete manifest against the current Coworld schema.
+> - [ ] Run `uv run coworld certify coworld_manifest.json` with the bundled players.
+> - [ ] Switch the repo topic to `coworld-complete` after certification passes.
+<!-- COWORLD-REPO-STATUS:END -->
+
+
 Tribal Quest is the adventurer Coworld surface for the shared Tribal Fortress
 world. [plan.md](plan.md) is the canonical contract for the integration.
 
