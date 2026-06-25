@@ -111,7 +111,17 @@
     "runnable": {
       "type": "game",
       "image": "ghcr.io/metta-ai/coworld-tribal-quest:latest",
-      "run": ["/bin/tribal_quest", "--address:0.0.0.0", "--port:8080"]
+      "run": [
+        "/bin/tribal_quest",
+        "--address:0.0.0.0",
+        "--port:8080"
+      ]
+    },
+    "docs": {
+      "readme": {
+        "type": "uri",
+        "value": "https://github.com/Metta-AI/coworld-tribal-quest/blob/9f1452a9f8fe820df7a0fdb56a5872534251d509/README.md"
+      }
     }
   },
   "player": [],
