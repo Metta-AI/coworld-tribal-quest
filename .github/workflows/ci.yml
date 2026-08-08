@@ -27,12 +27,12 @@ jobs:
           echo "$HOME/.nimby/nim/bin" >> "$GITHUB_PATH"
 
       - name: Install dependencies
-        run: |
-          nimble refresh
-          nimble install -y --depsOnly
+        run: nimby sync -g nimby.lock
 
       - name: Validate component descriptor
-        run: python3 scripts/validate_component.py
+        run: |
+          python3 scripts/validate_component.py
+          python3 scripts/validate_lock.py
 
       - name: Run unit tests
         run: |

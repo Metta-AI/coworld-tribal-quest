@@ -16,7 +16,10 @@ current `origin/main`.
 Before pushing gameplay, protocol, or shared contract changes, run:
 
 ```sh
+nimby use 2.2.10
+nimby sync -g nimby.lock
 python3 scripts/validate_component.py
+python3 scripts/validate_lock.py
 nim r --path:src tests/tests.nim
 python3 tests/test_http_artifacts.py
 TRIBAL_FORTRESS_PATH=${TRIBAL_FORTRESS_PATH:-$(pwd)/../coworld-tribal-fortress}
@@ -28,3 +31,6 @@ The canonical exact-revision integration and image gate runs in Fortress CI,
 which pins public Quest. Public Quest CI cannot read the private Fortress repo.
 If the engine module or typed API is missing from a local sibling checkout,
 fail loudly; never add another runtime to make the build pass.
+
+Release and CI dependency installs must use `nimby.lock`. Do not replace the
+lock with range-resolved `nimble install` in Docker or CI.

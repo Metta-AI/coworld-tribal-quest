@@ -53,7 +53,10 @@ to Fortress mode.
 Use a sibling Fortress checkout:
 
 ```sh
+nimby use 2.2.10
+nimby sync -g nimby.lock
 python3 scripts/validate_component.py
+python3 scripts/validate_lock.py
 nim r --path:src tests/tests.nim
 python3 tests/test_http_artifacts.py
 TRIBAL_FORTRESS_PATH=${TRIBAL_FORTRESS_PATH:-$(pwd)/../coworld-tribal-fortress}
@@ -68,6 +71,9 @@ Coworld replay-load mode and verifies `/healthz`, `/client/replay`, and a real
 image gate runs in Fortress CI after Fortress pins a public Quest commit.
 Quest's public CI validates the descriptor, protocol, HTTP artifact I/O, and
 formatting without attempting to read the private Fortress repo.
+Both CI and the development image install Quest's complete direct/transitive
+dependency graph from exact commits in `nimby.lock`; neither runs a floating
+`nimble refresh` or `nimble install`.
 
 Build the development image with the local sibling Fortress checkout as a
 BuildKit named context:

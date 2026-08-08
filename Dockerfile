@@ -32,8 +32,8 @@ WORKDIR /workspace/coworld-tribal-fortress
 RUN nimby sync -g nimby.lock
 
 WORKDIR /workspace/coworld-tribal-quest
-COPY tribal_quest.nimble .
-RUN nimble refresh && nimble install -y --depsOnly
+COPY nimby.lock .
+RUN nimby sync -g nimby.lock
 COPY . .
 
 ARG NimFlags="-d:release -d:useMalloc --opt:speed --stackTrace:on"
