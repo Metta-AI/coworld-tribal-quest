@@ -1,0 +1,48 @@
+{
+  "$schema": "./quest_component.schema.json",
+  "component_version": 1,
+  "component": "tribal_quest",
+  "coworld": "tribal_fortress",
+  "mode": "quest",
+  "entrypoint": "src/tribal_quest.nim",
+  "engine_module": "tribal_fortress_engine",
+  "engine_runtime": "nimgrid",
+  "league": {
+    "variant_id": "quest-8-adventurer",
+    "player_count": 8,
+    "tokens_field": "tokens"
+  },
+  "config_contract": {
+    "players_item": {
+      "required": ["name"],
+      "additional_properties": false
+    },
+    "required": [
+      "mode",
+      "tokens",
+      "players",
+      "max_steps",
+      "seed",
+      "steps_per_second",
+      "player_connect_timeout_seconds",
+      "num_agents",
+      "team_count"
+    ],
+    "accepted_shared_fields": [
+      "victory_condition"
+    ]
+  },
+  "results_contract": {
+    "required": [
+      "mode",
+      "scores",
+      "steps",
+      "truncation_reason",
+      "names",
+      "survival_ticks"
+    ],
+    "score_count": 8
+  },
+  "protocol": "sprite_v1",
+  "player_route": "/player"
+}

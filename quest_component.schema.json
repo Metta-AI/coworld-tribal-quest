@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Metta-AI/coworld-tribal-quest/blob/main/quest_component.schema.json",
+  "title": "Tribal Quest shared Coworld component descriptor",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "component_version",
+    "component",
+    "coworld",
+    "mode",
+    "entrypoint",
+    "engine_module",
+    "engine_runtime",
+    "league",
+    "config_contract",
+    "results_contract",
+    "protocol",
+    "player_route"
+  ],
+  "properties": {
+    "$schema": { "const": "./quest_component.schema.json" },
+    "component_version": { "const": 1 },
+    "component": { "const": "tribal_quest" },
+    "coworld": { "const": "tribal_fortress" },
+    "mode": { "const": "quest" },
+    "entrypoint": { "const": "src/tribal_quest.nim" },
+    "engine_module": { "const": "tribal_fortress_engine" },
+    "engine_runtime": { "const": "nimgrid" },
+    "league": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["variant_id", "player_count", "tokens_field"],
+      "properties": {
+        "variant_id": { "const": "quest-8-adventurer" },
+        "player_count": { "const": 8 },
+        "tokens_field": { "const": "tokens" }
+      }
+    },
+    "config_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["players_item", "required", "accepted_shared_fields"],
+      "properties": {
+        "players_item": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["required", "additional_properties"],
+          "properties": {
+            "required": { "const": ["name"] },
+            "additional_properties": { "const": false }
+          }
+        },
+        "required": {
+          "type": "array",
+          "const": [
+            "mode",
+            "tokens",
+            "players",
+            "max_steps",
+            "seed",
+            "steps_per_second",
+            "player_connect_timeout_seconds",
+            "num_agents",
+            "team_count"
+          ]
+        },
+        "accepted_shared_fields": {
+          "type": "array",
+          "const": ["victory_condition"]
+        }
+      }
+    },
+    "results_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "score_count"],
+      "properties": {
+        "required": {
+          "type": "array",
+          "const": [
+            "mode",
+            "scores",
+            "steps",
+            "truncation_reason",
+            "names",
+            "survival_ticks"
+          ]
+        },
+        "score_count": { "const": 8 }
+      }
+    },
+    "protocol": { "const": "sprite_v1" },
+    "player_route": { "const": "/player" }
+  }
+}

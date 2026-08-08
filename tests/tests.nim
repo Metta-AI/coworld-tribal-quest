@@ -1,18 +1,10 @@
 import std/[json, os, sets]
 
-import tribal_quest/fortress_engine
+import tribal_quest/contract
 import tribal_quest/protocol
 import tribal_quest/sprite_packets
 
 const RootDir = currentSourcePath.parentDir.parentDir
-
-template expectValueError(body: untyped, message: string) =
-  var rejected = false
-  try:
-    body
-  except ValueError:
-    rejected = true
-  doAssert rejected, message
 
 proc testAdventurerInputPayloads() =
   let mask = ButtonUp or ButtonRight or ButtonA
@@ -58,58 +50,25 @@ proc testGeneratedSpritePlaceholder() =
       inc nonTransparent
   doAssert nonTransparent > 0
 
-proc testFortressEngineConfigValidation() =
-  let config = defaultFortressEngineConfig()
-  doAssert config.path.len == 0
-  doAssert config.worldWidth == FortressWorldWidthTiles
-  doAssert config.worldHeight == FortressWorldHeightTiles
-  doAssert config.townAgentsPerTeam == FortressTownAgentsPerTeam
-  doAssert config.adventurerSlots == FortressAdventurerSlots
-
-  expectValueError(validateAdventurerSlot(-1), "negative slot must be rejected")
-  expectValueError(
-    validateAdventurerSlot(FortressAdventurerSlots),
-    "Fortress adventurer slots should be capped at 64"
-  )
-  validateAdventurerSlot(FortressAdventurerSlots - 1)
-
-  var blankPath = config
-  expectValueError(
-    blankPath.validateFortressEngineConfig(),
-    "fortress mode requires a concrete engine path"
-  )
-
-  let tempRoot = getTempDir() / "tribal_quest_fortress_engine_test"
-  if dirExists(tempRoot):
-    removeDir(tempRoot)
-  createDir(tempRoot)
-  createDir(tempRoot / "src")
-  writeFile(tempRoot / "src" / "tribal_village_engine.nim", "")
-  doAssert tempRoot.isLikelyFortressEngineCheckout()
-
-  var engineConfig = config
-  engineConfig.path = tempRoot
-  engineConfig.validateFortressEngineConfig()
-  removeDir(tempRoot)
-
-proc testDefaultFortressPath() =
-  let expected = RootDir / DefaultFortressCheckoutDir
-  doAssert defaultFortressEnginePath(RootDir) == expected
-
-proc testManifestHasNoRuntimeSelector() =
+proc testComponentDescriptor() =
   let
-    manifest = parseJson(readFile(RootDir / "coworld_manifest.json"))
-    properties = manifest["game"]["config_schema"]["properties"]
-    smokeConfig = manifest["variants"][0]["game_config"]
-  doAssert not properties.hasKey("worldRuntime")
-  doAssert not properties.hasKey("adventurerRole")
-  doAssert not smokeConfig.hasKey("worldRuntime")
+    component = parseJson(readFile(RootDir / "quest_component.json"))
+    league = component["league"]
+    config = component["config_contract"]
+    results = component["results_contract"]
+  doAssert component["component"].getStr() == "tribal_quest"
+  doAssert component["coworld"].getStr() == "tribal_fortress"
+  doAssert component["mode"].getStr() == "quest"
+  doAssert component["engine_module"].getStr() == "tribal_fortress_engine"
+  doAssert league["variant_id"].getStr() == "quest-8-adventurer"
+  doAssert league["player_count"].getInt() == QuestLeaguePlayerCount
+  doAssert config["required"].len == 9
+  doAssert results["score_count"].getInt() == QuestLeaguePlayerCount
+  doAssert not fileExists(RootDir / "coworld_manifest.json")
 
 when isMainModule:
   testAdventurerInputPayloads()
   testSpritePacketConstruction()
   testGeneratedSpritePlaceholder()
-  testFortressEngineConfigValidation()
-  testDefaultFortressPath()
-  testManifestHasNoRuntimeSelector()
+  testComponentDescriptor()
   echo "All tests passed"

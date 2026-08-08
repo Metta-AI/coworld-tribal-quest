@@ -1,33 +1,29 @@
-# AGENTS.md
+# Tribal Quest repository guidance
 
-Tribal Quest is a standalone Coworld game repo. Keep it shaped like the
-other standalone Metta cogame repos rather than like the BitWorld monorepo.
+Tribal Quest is the adventurer component of the canonical `tribal_fortress`
+Coworld. This repository owns the Quest player surface, protocol, development
+host, and integration proof. It does not own or upload a separate Coworld.
 
-Use these repositories as layout and packaging references:
+Quest depends directly on Fortress's `tribal_fortress_engine` Nim module. Keep
+Quest-specific code under `src/tribal_quest/`, the development/production mode
+entrypoint at `src/tribal_quest.nim`, and tests under `tests/`. Do not add a
+local simulation fallback, a Python bridge, or runtime source checkout logic.
 
-- https://github.com/Metta-AI/cogame-asteroid-arena
-- https://github.com/Metta-AI/cogame-big-adventure
-- https://github.com/Metta-AI/cogame-infinite-blocks
-- https://github.com/Metta-AI/cogame-jumper
-- https://github.com/Metta-AI/cogame-planet-wars
-- https://github.com/Metta-AI/cogame-crewrift
-- https://github.com/Metta-AI/cogame-heartleaf
+Before repository work, fetch current remote state. Do not implicitly merge or
+rebase dirty or feature work. For implementation, use a clean task worktree at
+current `origin/main`.
 
-The game vendors its tiny browser client and wire protocol helpers under
-`src/tribal_quest/`, and depends on the installed `coworld-tribal-fortress`
-runtime for the world simulation. Keep Tribal Quest-specific adapter code under
-`src/tribal_quest/`, the executable at `src/tribal_quest.nim`, and tests under
-`tests/`. Do not reintroduce the old local Quest simulation as a fallback.
-
-Before pushing gameplay or protocol changes, run:
+Before pushing gameplay, protocol, or shared contract changes, run:
 
 ```sh
+python3 scripts/validate_component.py
 nim r --path:src tests/tests.nim
+python3 tests/test_http_artifacts.py
 TRIBAL_FORTRESS_PATH=${TRIBAL_FORTRESS_PATH:-$(pwd)/../coworld-tribal-fortress}
-nim c --path:src --path:$TRIBAL_FORTRESS_PATH/src -o:out/tribal_quest src/tribal_quest.nim
+bash scripts/test_with_fortress.sh
 git diff --check
 ```
 
-If the Fortress checkout has not landed the `tribal_village_engine` Nim module
-yet, the build should fail at that missing import. Do not add a local fallback
-runtime or Python bridge to make it pass.
+`fortress.lock` identifies the exact Fortress revision used in CI and the
+development image. If the engine module or typed API is missing at that
+revision, fail loudly; never add another runtime to make the build pass.

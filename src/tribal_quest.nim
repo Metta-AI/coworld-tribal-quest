@@ -1,7 +1,7 @@
-import std/[httpclient, json, os, parseopt, strutils]
+import std/[json, os, parseopt, strutils]
 
 import jsony
-import tribal_village_engine
+import tribal_quest/coworld_io
 import tribal_quest/fortress_engine
 import tribal_quest/player_surface
 import tribal_quest/protocol
@@ -10,59 +10,31 @@ type
   TribalQuestError = object of CatchableError
 
   RunConfig = object
+    mode: string
     address: string
     port: int
     seed: int
-    maxTicks: int
-    maxGames: int
+    maxSteps: int
     tokens: seq[string]
-    fortressEnginePath: string
+    players: seq[string]
+    stepsPerSecond: float
+    playerConnectTimeoutSeconds: float
+    numAgents: int
+    teamCount: int
+    fortressDataDir: string
     saveReplayPath: string
     saveScoresPath: string
 
 const
   CogameConfigUriEnv = "COGAME_CONFIG_URI"
-  CogameResultsUriEnv = "COGAME_RESULTS_URI"
-  CogameSaveReplayUriEnv = "COGAME_SAVE_REPLAY_URI"
-  UnlimitedFortressMaxSteps = high(int)
-
-proc pathFromCogameUri(value, source: string): string =
-  ## Converts a Coworld input URI into a local path.
-  if value.len == 0:
-    return ""
-  const FilePrefix = "file://"
-  if value.startsWith(FilePrefix):
-    result = value[FilePrefix.len .. ^1]
-    if result.len == 0:
-      raise newException(ValueError, "empty file URI from " & source)
-    return
-  if value.startsWith("http://") or value.startsWith("https://"):
-    var client = newHttpClient(timeout = 30_000)
-    try:
-      let body = client.getContent(value)
-      result = getTempDir() / ("cogame-" & source.toLowerAscii() & ".json")
-      writeFile(result, body)
-      return
-    finally:
-      client.close()
-  if "://" in value:
-    raise newException(ValueError, "unsupported URI from " & source & ": " & value)
-  raise newException(ValueError, source & " must be a URI")
-
-proc pathFromCogameEnv(name: string): string =
-  ## Reads a Coworld URI env var and returns the local path it addresses.
-  pathFromCogameUri(getEnv(name), name)
+  FortressDataDirEnv = "TRIBAL_FORTRESS_DATA_DIR"
 
 proc readConfigStrings(node: JsonNode, name: string, values: var seq[string]) =
-  ## Reads one optional string-array config field.
   if not node.hasKey(name):
     return
   let items = node[name]
   if items.kind != JArray:
-    raise newException(
-      TribalQuestError,
-      "Config field " & name & " must be an array."
-    )
+    raise newException(TribalQuestError, "Config field " & name & " must be an array.")
   values.setLen(0)
   for i in 0 ..< items.len:
     let item = items[i]
@@ -73,180 +45,195 @@ proc readConfigStrings(node: JsonNode, name: string, values: var seq[string]) =
       )
     values.add(item.getStr())
 
-proc readConfigString(node: JsonNode, name: string, value: var string) =
-  ## Reads one optional string config field.
-  if not node.hasKey(name):
+proc readConfigPlayers(node: JsonNode, values: var seq[string]) =
+  if not node.hasKey("players"):
     return
-  let item = node[name]
-  if item.kind != JString:
-    raise newException(
-      TribalQuestError,
-      "Config field " & name & " must be a string."
-    )
-  value = item.getStr()
+  let items = node["players"]
+  if items.kind != JArray:
+    raise newException(TribalQuestError, "Config field players must be an array.")
+  values.setLen(0)
+  for i in 0 ..< items.len:
+    let item = items[i]
+    if item.kind != JObject or item.len != 1 or not item.hasKey("name") or
+        item["name"].kind != JString:
+      raise newException(
+        TribalQuestError,
+        "Config field players[" & $i &
+          "] must be an object containing only a string name."
+      )
+    values.add(item["name"].getStr())
+
+proc readConfigString(node: JsonNode, name: string, value: var string) =
+  if node.hasKey(name):
+    if node[name].kind != JString:
+      raise newException(TribalQuestError, "Config field " & name & " must be a string.")
+    value = node[name].getStr()
 
 proc readConfigInt(node: JsonNode, name: string, value: var int) =
-  ## Reads one optional integer config field.
-  if not node.hasKey(name):
-    return
-  let item = node[name]
-  if item.kind != JInt:
-    raise newException(
-      TribalQuestError,
-      "Config field " & name & " must be an integer."
-    )
-  value = item.getInt()
+  if node.hasKey(name):
+    if node[name].kind != JInt:
+      raise newException(TribalQuestError, "Config field " & name & " must be an integer.")
+    value = node[name].getInt()
 
-proc defaultReplayPath(): string =
-  ## Returns the configured replay save path from the environment.
-  pathFromCogameEnv(CogameSaveReplayUriEnv)
-
-proc defaultScoresPath(): string =
-  ## Returns the configured score save path from the environment.
-  pathFromCogameEnv(CogameResultsUriEnv)
+proc readConfigFloat(node: JsonNode, name: string, value: var float) =
+  if node.hasKey(name):
+    case node[name].kind
+    of JInt:
+      value = node[name].getInt().float
+    of JFloat:
+      value = node[name].getFloat()
+    else:
+      raise newException(TribalQuestError, "Config field " & name & " must be a number.")
 
 proc isKnownConfigField(name: string): bool =
-  ## Returns true when a JSON config field is supported.
-  case name
-  of "address",
-      "port",
-      "seed",
-      "maxTicks",
-      "maxGames",
-      "tokens",
-      "fortressEnginePath",
-      "saveReplayPath",
-      "saveScoresPath":
-    true
-  else:
-    false
-
-proc validateConfigFields(node: JsonNode) =
-  ## Raises when JSON config contains an unknown field.
-  for name, _ in node.pairs:
-    if not name.isKnownConfigField():
-      raise newException(TribalQuestError, "Unknown config field: " & name)
+  name in [
+    "mode",
+    "tokens",
+    "players",
+    "max_steps",
+    "seed",
+    "steps_per_second",
+    "player_connect_timeout_seconds",
+    "num_agents",
+    "team_count",
+    "victory_condition"
+  ]
 
 proc update(config: var RunConfig, jsonText: string) =
-  ## Updates the CLI config from JSON.
-  if jsonText.len == 0:
-    return
+  ## Reads the shared Fortress/Quest hosted config. victory_condition is a
+  ## Fortress-only field intentionally accepted so both modes share one schema.
   var node: JsonNode
   try:
     node = fromJson(jsonText)
   except jsony.JsonError as e:
-    raise newException(
-      TribalQuestError,
-      "Could not parse config JSON: " & e.msg
-    )
+    raise newException(TribalQuestError, "Could not parse config JSON: " & e.msg)
   if node.kind != JObject:
     raise newException(TribalQuestError, "Config must be a JSON object.")
-  node.validateConfigFields()
-  node.readConfigString("address", config.address)
-  node.readConfigInt("port", config.port)
-  node.readConfigString("saveReplayPath", config.saveReplayPath)
-  node.readConfigString("saveScoresPath", config.saveScoresPath)
-  node.readConfigInt("seed", config.seed)
-  node.readConfigInt("maxTicks", config.maxTicks)
-  node.readConfigInt("maxGames", config.maxGames)
+  for name, _ in node.pairs:
+    if not name.isKnownConfigField():
+      raise newException(TribalQuestError, "Unknown config field: " & name)
+  node.readConfigString("mode", config.mode)
   node.readConfigStrings("tokens", config.tokens)
-  node.readConfigString("fortressEnginePath", config.fortressEnginePath)
+  node.readConfigPlayers(config.players)
+  node.readConfigInt("max_steps", config.maxSteps)
+  node.readConfigInt("seed", config.seed)
+  node.readConfigFloat("steps_per_second", config.stepsPerSecond)
+  node.readConfigFloat(
+    "player_connect_timeout_seconds",
+    config.playerConnectTimeoutSeconds
+  )
+  node.readConfigInt("num_agents", config.numAgents)
+  node.readConfigInt("team_count", config.teamCount)
+  var ignoredVictoryCondition = 0
+  node.readConfigInt("victory_condition", ignoredVictoryCondition)
 
 proc requireOptionValue(name, value: string) =
-  ## Raises when a CLI option is missing its value.
   if value.len == 0:
-    raise newException(
-      TribalQuestError,
-      "Option --" & name & " requires a value."
-    )
+    raise newException(TribalQuestError, "Option --" & name & " requires a value.")
 
 proc parseOptionInt(name, value: string): int =
-  ## Parses one integer CLI option.
   name.requireOptionValue(value)
   try:
     result = parseInt(value)
   except ValueError:
-    raise newException(
-      TribalQuestError,
-      "Option --" & name & " must be an integer."
-    )
+    raise newException(TribalQuestError, "Option --" & name & " must be an integer.")
 
-proc fortressEngineConfig(config: RunConfig): fortress_engine.FortressEngineConfig =
-  ## Builds the required shared-engine config selected by the Quest run config.
-  result = fortress_engine.defaultFortressEngineConfig()
-  result.path = config.fortressEnginePath
-  if result.path.strip().len == 0:
-    result.path = fortress_engine.defaultFortressEnginePath()
-
-proc fortressMaxSteps(config: RunConfig): int =
-  ## Fortress's env has a finite default episode cap, so pass an explicit
-  ## practical infinity when Quest's dev host is configured as unlimited.
-  if config.maxTicks > 0:
-    return config.maxTicks
-  UnlimitedFortressMaxSteps
-
-proc validate(config: RunConfig) =
-  ## Raises when a run config value is outside the supported range.
-  if config.maxTicks < 0:
-    raise newException(
-      TribalQuestError,
-      "Config field maxTicks must be non-negative."
-    )
-  if config.maxGames < 0:
-    raise newException(
-      TribalQuestError,
-      "Config field maxGames must be non-negative."
-    )
+proc parseOptionFloat(name, value: string): float =
+  name.requireOptionValue(value)
   try:
-    config.fortressEngineConfig().validateFortressEngineConfig()
-  except ValueError as e:
-    raise newException(TribalQuestError, e.msg)
+    result = parseFloat(value)
+  except ValueError:
+    raise newException(TribalQuestError, "Option --" & name & " must be a number.")
 
-proc echoStartupPaths(config: RunConfig) =
-  ## Prints configured runtime, replay, and score output paths.
-  let engineConfig = config.fortressEngineConfig()
-  if config.saveReplayPath.len > 0:
-    echo "Writing replay file: " & config.saveReplayPath
-  else:
-    echo "Not writing replay file."
-  if config.saveScoresPath.len > 0:
-    echo "Writing scores file: " & config.saveScoresPath
-  else:
-    echo "Not writing scores file."
-  if config.tokens.len > 0:
-    echo "Using " & $config.tokens.len & " player connection tokens."
-  else:
-    echo "No player connection tokens configured."
-  echo "World runtime: fortress"
-  echo "Fortress engine path: " & engineConfig.path
-  echo "Fortress world target: " & $engineConfig.worldWidth & "x" &
-    $engineConfig.worldHeight & " tiles"
-  echo "NPC town agent cap: " & $engineConfig.townAgentsPerTeam
-  echo "Adventurer slots: " & $engineConfig.adventurerSlots
-  if config.maxTicks > 0:
-    echo "Max ticks: " & $config.maxTicks
-  else:
-    echo "Max ticks: infinite"
-  if config.maxGames > 0:
-    echo "Max games: " & $config.maxGames
-  else:
-    echo "Max games: infinite"
+proc validate(config: RunConfig, hostedConfig: bool) =
+  if config.mode != "quest":
+    raise newException(TribalQuestError, "Config field mode must be quest.")
+  if config.maxSteps < 1:
+    raise newException(TribalQuestError, "Config field max_steps must be positive.")
+  if hostedConfig and config.tokens.len != QuestLeaguePlayerCount:
+    raise newException(
+      TribalQuestError,
+      "Quest league config requires exactly " & $QuestLeaguePlayerCount & " tokens."
+    )
+  if not hostedConfig and config.tokens.len notin [0, QuestLeaguePlayerCount]:
+    raise newException(
+      TribalQuestError,
+      "Development config tokens must be empty or contain exactly " &
+        $QuestLeaguePlayerCount & " items."
+    )
+  for token in config.tokens:
+    if token.len == 0:
+      raise newException(TribalQuestError, "Player tokens must not be empty.")
+  if hostedConfig and config.players.len != QuestLeaguePlayerCount:
+    raise newException(
+      TribalQuestError,
+      "Quest league config requires exactly " & $QuestLeaguePlayerCount & " players."
+    )
+  if config.players.len notin [0, QuestLeaguePlayerCount]:
+    raise newException(
+      TribalQuestError,
+      "Config field players must be empty or contain exactly " &
+        $QuestLeaguePlayerCount & " items."
+    )
+  for player in config.players:
+    if player.len == 0:
+      raise newException(TribalQuestError, "Player names must not be empty.")
+  if config.stepsPerSecond < 1 or config.stepsPerSecond > 1000:
+    raise newException(
+      TribalQuestError,
+      "Config field steps_per_second must be between 1 and 1000."
+    )
+  if config.playerConnectTimeoutSeconds < 0:
+    raise newException(
+      TribalQuestError,
+      "Config field player_connect_timeout_seconds must be non-negative."
+    )
+  if config.numAgents != QuestLeaguePlayerCount:
+    raise newException(
+      TribalQuestError,
+      "Config field num_agents must equal " & $QuestLeaguePlayerCount & "."
+    )
+  if config.teamCount != QuestLeaguePlayerCount:
+    raise newException(
+      TribalQuestError,
+      "Config field team_count must equal " & $QuestLeaguePlayerCount & "."
+    )
+  questFortressEngineConfig(config.seed, config.maxSteps)
+    .validateQuestEngineContract()
+
+proc echoStartup(config: RunConfig) =
+  let engineConfig = questFortressEngineConfig(config.seed, config.maxSteps)
+  echo "Mode: quest"
+  echo "World runtime: tribal_fortress_engine"
+  echo "Fortress world: ", engineConfig.worldWidth, "x",
+      engineConfig.worldHeight
+  echo "NPC town agents per team: ", engineConfig.townAgentsPerTeam
+  echo "Adventurer slots: ", engineConfig.adventurerSlots
+  echo "League players: ", config.tokens.len
+  echo "Max steps: ", config.maxSteps
+  echo "Steps per second: ", config.stepsPerSecond
 
 when isMainModule:
   var
     config = RunConfig(
+      mode: "quest",
       address: DefaultHost,
       port: DefaultPort,
       seed: 0xB1770,
-      maxTicks: DefaultMaxTicks,
-      maxGames: DefaultMaxGames,
+      maxSteps: 300,
       tokens: @[],
-      fortressEnginePath: "",
-      saveReplayPath: defaultReplayPath(),
-      saveScoresPath: defaultScoresPath()
+      players: @[],
+      stepsPerSecond: 10,
+      playerConnectTimeoutSeconds: 0,
+      numAgents: QuestLeaguePlayerCount,
+      teamCount: QuestLeaguePlayerCount,
+      fortressDataDir: getEnv(FortressDataDirEnv, "data"),
+      saveReplayPath: getEnv("COGAME_SAVE_REPLAY_URI"),
+      saveScoresPath: getEnv("COGAME_RESULTS_URI")
     )
-    configPath = pathFromCogameEnv(CogameConfigUriEnv)
+    configPath = getEnv(CogameConfigUriEnv)
     configJson = ""
+
   for kind, key, val in getopt():
     case kind
     of cmdLongOption:
@@ -258,13 +245,15 @@ when isMainModule:
         config.port = key.parseOptionInt(val)
       of "seed":
         config.seed = key.parseOptionInt(val)
-      of "max-ticks":
-        config.maxTicks = key.parseOptionInt(val)
-      of "max-games":
-        config.maxGames = key.parseOptionInt(val)
-      of "fortress-engine-path":
+      of "max-steps":
+        config.maxSteps = key.parseOptionInt(val)
+      of "steps-per-second":
+        config.stepsPerSecond = key.parseOptionFloat(val)
+      of "player-connect-timeout-seconds":
+        config.playerConnectTimeoutSeconds = key.parseOptionFloat(val)
+      of "fortress-data-dir":
         key.requireOptionValue(val)
-        config.fortressEnginePath = val
+        config.fortressDataDir = val
       of "save-replay":
         key.requireOptionValue(val)
         config.saveReplayPath = val
@@ -285,26 +274,17 @@ when isMainModule:
       raise newException(TribalQuestError, "Unexpected argument: " & key)
     of cmdEnd:
       discard
-  if configPath.len > 0:
-    config.update(readFile(configPath))
+
+  let hostedConfig = configPath.len > 0
+  if hostedConfig:
+    config.update(readCoworldData(configPath, CogameConfigUriEnv))
   if configJson.len > 0:
     config.update(configJson)
-  config.validate()
-  config.echoStartupPaths()
+  config.validate(hostedConfig or configJson.len > 0)
+  config.echoStartup()
 
-  let questEngineConfig = config.fortressEngineConfig()
-  putEnv(FortressEnginePathEnv, questEngineConfig.path)
-  var engine = tribal_village_engine.initFortressEngine(
-    tribal_village_engine.FortressEngineConfig(
-      maxSteps: config.fortressMaxSteps(),
-      seed: config.seed,
-      adventurerViewRadius: QuestAdventureCropTiles div 2,
-      aiMode: "hybrid",
-      worldWidth: questEngineConfig.worldWidth,
-      worldHeight: questEngineConfig.worldHeight,
-      townAgentsPerTeam: questEngineConfig.townAgentsPerTeam,
-      adventurerSlots: questEngineConfig.adventurerSlots
-    )
+  var engine = initFortressEngine(
+    questFortressEngineConfig(config.seed, config.maxSteps)
   )
   try:
     runQuestPlayerSurface(
@@ -314,7 +294,11 @@ when isMainModule:
       saveReplayPath = config.saveReplayPath,
       saveScoresPath = config.saveScoresPath,
       tokens = config.tokens,
-      maxGames = config.maxGames
+      playerNames = config.players,
+      stepSeconds = 1.0 / config.stepsPerSecond,
+      playerConnectTimeoutSeconds = config.playerConnectTimeoutSeconds,
+      renderEverySteps = 1,
+      fortressDataDir = config.fortressDataDir
     )
   finally:
     engine.close()

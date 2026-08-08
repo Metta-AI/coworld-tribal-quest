@@ -1,0 +1,60 @@
+name: Quest component CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nimby and Nim
+        run: |
+          curl -fsSL -o /usr/local/bin/nimby \
+            https://github.com/treeform/nimby/releases/download/0.1.26/nimby-Linux-X64
+          chmod +x /usr/local/bin/nimby
+          nimby use 2.2.10
+          echo "$HOME/.nimby/nim/bin" >> "$GITHUB_PATH"
+
+      - name: Check out the locked Fortress engine
+        run: |
+          fortress_ref=$(tr -d '\n' < fortress.lock)
+          git clone https://github.com/Metta-AI/coworld-tribal-fortress.git ../coworld-tribal-fortress
+          git -C ../coworld-tribal-fortress checkout "$fortress_ref"
+
+      - name: Install dependencies
+        run: |
+          nimby sync -g ../coworld-tribal-fortress/nimby.lock
+          nimble refresh
+          nimble install -y --depsOnly
+
+      - name: Validate component descriptor
+        run: python3 scripts/validate_component.py
+
+      - name: Run unit tests
+        run: |
+          nim r --path:src tests/tests.nim
+          python3 tests/test_http_artifacts.py
+
+      - name: Compile and smoke with the exact Fortress engine
+        env:
+          REQUIRE_LOCKED_FORTRESS: "1"
+        run: bash scripts/test_with_fortress.sh
+
+      - name: Check formatting and whitespace
+        run: |
+          find src players tests -name '*.nim' -print0 | xargs -0 nimpretty
+          git diff --exit-code
+          git diff --check
+
+      - name: Build development image
+        run: docker build --tag tribal-quest-component:test .

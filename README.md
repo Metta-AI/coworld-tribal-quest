@@ -1,112 +1,101 @@
 # Tribal Quest
 
-<!-- COWORLD-VERIFY-BADGE:START -->
-![Coworld verify: failed](https://img.shields.io/badge/coworld%20verify-failed-red)
-<!-- COWORLD-VERIFY-BADGE:END -->
+Tribal Quest is the adventurer component and Quest league mode of the canonical
+`tribal_fortress` Coworld. Fortress and Quest ship in one immutable game image
+and use the same `FortressEngine` world simulation. The two leagues select the
+`fortress-8-town` and `quest-8-adventurer` variants respectively.
 
+This repository is deliberately not a separately uploadable Coworld. It has no
+root `coworld_manifest.json`. The canonical manifest, image, certification, and
+upload workflow live in
+[`Metta-AI/coworld-tribal-fortress`](https://github.com/Metta-AI/coworld-tribal-fortress).
+[`quest_component.json`](quest_component.json) is the checked, machine-readable
+interface Fortress consumes when assembling that artifact.
 
-<!-- COWORLD-REPO-STATUS:START -->
-> [!NOTE]
-> Coworld repo status: **incomplete** (`coworld-incomplete`).
-> Canonical repository: `Metta-AI/coworld-tribal-quest`.
-> Manifest path: `coworld_manifest.json`.
-> Build path: `Dockerfile`
-> Certification: blocked until `uv run coworld certify coworld_manifest.json` passes and the result is recorded.
->
-> Missing pieces:
-> - [ ] Validate the root concrete manifest against the current Coworld schema.
-> - [ ] Run `uv run coworld certify coworld_manifest.json` with the bundled players.
-> - [ ] Switch the repo topic to `coworld-complete` after certification passes.
-<!-- COWORLD-REPO-STATUS:END -->
+## Runtime ownership
 
+- Fortress owns one authoritative `FortressEngine` and all world simulation.
+- Quest mounts `/player` adventurer controls onto that engine.
+- The shared host submits town and adventurer inputs, steps the engine once,
+  then renders both surfaces from the same post-step state.
+- `src/tribal_quest.nim` is also a useful Quest-only development host. It starts
+  the same Fortress engine because there is no surrounding host in that case.
+- There is no Quest simulation fallback, production Python bridge, runtime
+  checkout path, or second world.
 
-Tribal Quest is the adventurer Coworld surface for the shared Tribal Fortress
-world. [plan.md](plan.md) is the canonical contract for the integration.
-
-There is no supported local Quest simulation mode anymore. Quest always runs on
-the Fortress Nim engine, and missing Fortress code should fail at build or
-startup instead of falling back to an old route. There is no Python bridge and
-no production `/adventure` route.
-
-The intended integrated runtime has one host-owned `FortressEngine` world.
-Quest installs its adventurer `/player` surface onto that existing engine and
-does not create a second world. The standalone binary below is only the
-Quest-only development host for exercising the same surface before a combined
-Fortress host imports it.
-
-## Running
-
-Use a sibling Fortress checkout while the shared runtime is local:
-
-```sh
-TRIBAL_FORTRESS_PATH=${TRIBAL_FORTRESS_PATH:-$(pwd)/../coworld-tribal-fortress}
-nim c \
-  --path:src \
-  --path:$TRIBAL_FORTRESS_PATH/src \
-  -o:out/tribal_quest \
-  src/tribal_quest.nim
-./out/tribal_quest --address:127.0.0.1 --port:2000 --fortress-engine-path:$TRIBAL_FORTRESS_PATH
-```
-
-Open:
-
-- `http://127.0.0.1:2000/client/player?slot=0&name=human&reconnect=2`
-
-`/client/player` is the canonical sprite-based adventurer gridworld view. It
-uses the shared Fortress terrain/entity state and renders `sprite_v1` packets
-through Quest's vendored player client centered on the controlled adventurer.
-
-Or run the bundled Nim adventurer pilot against the same `/player` route:
-
-```sh
-nim c \
-  --path:src \
-  -o:out/tribal_quest_adventurer \
-  players/adventurer/adventurer.nim
-./out/tribal_quest_adventurer --address:127.0.0.1 --port:2000 --slot:0 --ticks:80
-```
-
-Quest expects the Fortress checkout on the Nim path to expose
-`src/tribal_village_engine.nim`. Quest calls that Nim engine directly from the
-adventurer surface.
-
-Optional config fields:
+The production entrypoint accepts the shared snake-case game config:
 
 ```json
 {
-  "fortressEnginePath": "../coworld-tribal-fortress"
+  "mode": "quest",
+  "tokens": ["q0", "q1", "q2", "q3", "q4", "q5", "q6", "q7"],
+  "players": [
+    {"name": "p0"}, {"name": "p1"}, {"name": "p2"}, {"name": "p3"},
+    {"name": "p4"}, {"name": "p5"}, {"name": "p6"}, {"name": "p7"}
+  ],
+  "max_steps": 18000,
+  "seed": 726896,
+  "steps_per_second": 10,
+  "player_connect_timeout_seconds": 180,
+  "num_agents": 8,
+  "team_count": 8
 }
 ```
 
-## Fortress Adapter
+It emits a fixed eight-seat result containing `mode`, `scores`, `steps`,
+`truncation_reason`, `names`, and `survival_ticks`. It intentionally accepts
+and ignores the shared `victory_condition` field, which applies only to
+Fortress mode.
 
-`src/tribal_quest/fortress_engine.nim` keeps the Quest-owned adapter contract:
+## Develop and test
 
-- discovers `TRIBAL_FORTRESS_PATH` or `../coworld-tribal-fortress`
-- fails fast unless that checkout exposes `src/tribal_village_engine.nim`
-- targets a 768 by 480 Fortress world with 200 town agents per team
-- caps Quest adventurer slots at 64
-- forwards button masks through the typed Fortress engine API
-- renders the local adventurer grid as `sprite_v1` packets without JSON
-  in the tick loop
-- resolves sprites from the shared Fortress `data/` asset set and uses visible
-  placeholders for missing art
+Use a sibling Fortress checkout:
 
-The old Party Progressor mechanics are now product reference material for what
-should move into the Fortress engine or Quest adventurer presentation. They are
-not a second runtime in this repo.
+```sh
+python3 scripts/validate_component.py
+nim r --path:src tests/tests.nim
+python3 tests/test_http_artifacts.py
+TRIBAL_FORTRESS_PATH=${TRIBAL_FORTRESS_PATH:-$(pwd)/../coworld-tribal-fortress}
+bash scripts/test_with_fortress.sh
+```
 
-## Project Layout
+The integration script compiles the Quest host and bundled adventurer, runs a
+typed engine/render test, starts a one-step shared-contract episode, and checks
+the result and replay envelopes. CI checks out the exact Fortress commit in
+[`fortress.lock`](fortress.lock) before running the same proof and building the
+development image.
 
-- `src/tribal_quest.nim` is the Quest-only development host that starts a
-  Fortress engine and installs the Quest `/player` adventurer surface.
-- `src/tribal_quest/player_surface.nim` owns the Quest `/player` websocket and
-  exposes mount hooks for a host-owned Fortress engine.
-- `src/tribal_quest/client.nim`, `src/tribal_quest/protocol.nim`, and
-  `src/tribal_quest/client_assets/` are the vendored browser/protocol shim for
-  Quest's player surface.
-- `src/tribal_quest/fortress_engine.nim` contains the Quest-side adapter
-  contract.
-- `players/adventurer/adventurer.nim` is the bundled Nim websocket pilot.
-- `plan.md` is the integration source of truth for the Quest half.
-- `tests/tests.nim` contains lean adapter-contract checks.
+For an interactive local run:
+
+```sh
+TRIBAL_FORTRESS_PATH=${TRIBAL_FORTRESS_PATH:-$(pwd)/../coworld-tribal-fortress}
+nim c --path:src --path:$TRIBAL_FORTRESS_PATH/src \
+  -o:out/tribal_quest src/tribal_quest.nim
+./out/tribal_quest --address:127.0.0.1 --port:2000 \
+  --fortress-data-dir:$TRIBAL_FORTRESS_PATH/data --max-steps:18000 \
+  --steps-per-second:10
+```
+
+Then open
+`http://127.0.0.1:2000/client/player?slot=0&name=human&reconnect=2`,
+or run the bundled pilot:
+
+```sh
+nim c --path:src -o:out/tribal_quest_adventurer \
+  players/adventurer/adventurer.nim
+./out/tribal_quest_adventurer \
+  --address:127.0.0.1 --port:2000 --slot:0 --ticks:80
+```
+
+The sprite client uses a 21 by 21 adventurer-centered crop at 16 pixels per
+tile. Missing art renders as labeled placeholders rather than a blank frame.
+
+## Project layout
+
+- `src/tribal_quest.nim`: shared-config entrypoint and development host.
+- `src/tribal_quest/player_surface.nim`: mountable HTTP/WebSocket surface.
+- `src/tribal_quest/fortress_engine.nim`: typed Fortress contract adapter.
+- `src/tribal_quest/gridworld_sprites.nim`: shared-world sprite rendering.
+- `players/adventurer/adventurer.nim`: bundled sprite-protocol pilot.
+- `quest_component.json`: non-uploadable shared artifact contract.
+- `tests/`: protocol, descriptor, engine, rendering, and episode proof.

@@ -1,6 +1,6 @@
-version     = "0.1.0"
-author      = "treeform@softmax.com"
-description = "Tribal Quest adventurer Coworld surface for Tribal Fortress."
+version     = "0.2.0"
+author      = "Metta Team"
+description = "Tribal Quest adventurer component for the shared Tribal Fortress Coworld."
 license     = "MIT"
 
 srcDir = "src"
@@ -10,7 +10,7 @@ switch("threads", "on")
 switch("mm", "orc")
 switch("path", "src")
 
-requires "nim >= 2.2.4"
+requires "nim >= 2.2.10"
 requires "jsony"
 requires "mummy >= 0.4.7"
 requires "pixie"

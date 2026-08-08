@@ -3,7 +3,6 @@ import std/[os, sets, strutils, tables]
 import pixie
 import environment
 import quest_monsters
-import tribal_village_engine
 import types
 
 import tribal_quest/fortress_engine
@@ -25,14 +24,12 @@ type
     nextSpriteId: int
     sprites: Table[string, SpriteAsset]
 
-proc initQuestSpriteRegistry*(fortressPath = ""): QuestSpriteRegistry =
-  let root =
-    if fortressPath.strip().len > 0:
-      fortressPath
-    else:
-      defaultFortressEnginePath()
+proc initQuestSpriteRegistry*(dataDir = "data"): QuestSpriteRegistry =
+  ## The shared host owns the Fortress data directory and passes it when its
+  ## working directory is not the repository root. This is an internal mount
+  ## contract, never a hosted Coworld configuration field.
   QuestSpriteRegistry(
-    dataDir: root / "data",
+    dataDir: dataDir,
     nextSpriteId: 1,
     sprites: initTable[string, SpriteAsset]()
   )
@@ -76,7 +73,8 @@ proc questMonsterLabelLocal(species: QuestMonsterSpecies): string =
   else:
     "quest monster"
 
-proc unitSpriteBase(unitClass: AgentUnitClass, agentId: int, packed: bool): string =
+proc unitSpriteBase(unitClass: AgentUnitClass, agentId: int,
+    packed: bool): string =
   case unitClass
   of UnitVillager:
     case agentId mod MapAgentsPerTeam
@@ -140,7 +138,8 @@ proc candidatePaths(registry: QuestSpriteRegistry, key, dir: string): seq[string
       result.add(registry.dataDir / "oriented" / (key & "." & dir & ".png"))
       result.add(registry.dataDir / "oriented" / (key & ".s.png"))
 
-proc resolveAssetPath(registry: QuestSpriteRegistry, key: string, orientation = S): string =
+proc resolveAssetPath(registry: QuestSpriteRegistry, key: string,
+    orientation = S): string =
   let dir = directionKey(orientation)
   for path in registry.candidatePaths(key, dir):
     if fileExists(path):
@@ -291,7 +290,8 @@ proc spriteForThing(
       questMonsterLabelLocal(thing.questMonsterSpecies),
       thing.orientation
     )
-  registry.spriteForAsset(thingSpriteKeyLocal(thing.kind), "thing " & $thing.kind, thing.orientation)
+  registry.spriteForAsset(thingSpriteKeyLocal(thing.kind), "thing " &
+      $thing.kind, thing.orientation)
 
 proc addCellObject(
   packet: var seq[uint8],
@@ -440,7 +440,8 @@ proc buildAdventurerSpriteFrame*(
       "selected player " & civKey,
       selectionRingPixels(QuestSpriteTilePixels, QuestSpriteTilePixels)
     )
-  if selectedX >= 0 and selectedX < view.width and selectedY >= 0 and selectedY < view.height:
+  if selectedX >= 0 and selectedX < view.width and selectedY >= 0 and
+      selectedY < view.height:
     packet.addCellObject(
       knownSprites,
       registry,

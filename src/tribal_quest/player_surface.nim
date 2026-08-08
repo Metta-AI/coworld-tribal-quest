@@ -1,15 +1,14 @@
 import
   std/[json, locks, monotimes, os, sets, strutils, tables, times],
   mummy,
-  tribal_village_engine,
   tribal_quest/client,
+  tribal_quest/coworld_io,
   tribal_quest/fortress_engine,
   tribal_quest/gridworld_sprites,
   tribal_quest/sprite_packets
 
 const
   PlayerSocketPath = "/player"
-  StepMilliseconds = 100
 
 type
   QuestPlayerFrame* = tuple[websocket: WebSocket, frame: string]
@@ -18,10 +17,11 @@ type
     slot: int
     name: string
     lastMask: uint8
-    survivalTicks: int
+    startTick: int
     knownSprites: HashSet[int]
 
   PlayerScore = object
+    slot: int
     name: string
     survivalTicks: int
 
@@ -29,6 +29,7 @@ type
     lock: Lock
     engine: ptr FortressEngine
     tokens: seq[string]
+    playerNames: seq[string]
     viewers: Table[WebSocket, ViewerState]
     closedSockets: seq[WebSocket]
     completedScores: seq[PlayerScore]
@@ -83,7 +84,7 @@ proc surfaceIsInitialized(): bool {.gcsafe.} =
 proc firstAvailableSlot(): int =
   if surface.engine.isNil:
     return -1
-  var used: array[FortressAdventurerSlots, bool]
+  var used: array[QuestAdventurerSlots, bool]
   for _, viewer in surface.viewers.pairs:
     if viewer.slot >= 0 and viewer.slot < used.len:
       used[viewer.slot] = true
@@ -110,6 +111,8 @@ proc claimViewerSlot(request: Request): int =
 
 proc viewerName(request: Request, slot: int): string =
   result = request.queryValue("name").strip()
+  if result.len == 0 and slot >= 0 and slot < surface.playerNames.len:
+    result = surface.playerNames[slot]
   if result.len == 0:
     result = "adventurer_" & $slot
 
@@ -183,7 +186,10 @@ proc handleQuestAdventurerHttp*(request: Request): bool {.gcsafe.} =
         if slot < 0:
           request.respond(400, textHeaders(), "invalid or unavailable adventurer slot\n")
           return
-        let agentId = surface.engine[].claimAdventurer(slot, slot mod FortressTownTokenSlots)
+        let agentId = surface.engine[].claimAdventurer(
+          slot,
+          slot mod QuestLeaguePlayerCount
+        )
         if agentId < 0:
           request.respond(409, textHeaders(), "could not claim adventurer\n")
           return
@@ -192,7 +198,7 @@ proc handleQuestAdventurerHttp*(request: Request): bool {.gcsafe.} =
           slot: slot,
           name: request.viewerName(slot),
           lastMask: 0,
-          survivalTicks: 0,
+          startTick: surface.engine[].tick,
           knownSprites: initHashSet[int]()
         )
     return
@@ -273,8 +279,9 @@ proc serverThreadProc(args: ServerThreadArgs) {.thread.} =
 
 proc rememberScore(viewer: ViewerState) =
   surface.completedScores.add(PlayerScore(
+    slot: viewer.slot,
     name: viewer.name,
-    survivalTicks: viewer.survivalTicks
+    survivalTicks: max(0, surface.engine[].tick - viewer.startTick)
   ))
 
 proc pruneClosedViewers() =
@@ -314,7 +321,6 @@ proc buildQuestAdventurerFrames*(): seq[QuestPlayerFrame] =
         surface.spriteRegistry,
         viewer.knownSprites
       )
-      inc viewer.survivalTicks
       result.add((
         websocket: websocket,
         frame: frame
@@ -343,57 +349,91 @@ proc tickQuestAdventurerSurface*(): int =
   sendQuestAdventurerFrames(frames)
   frames.len
 
-proc writeJsonFile(path: string, node: JsonNode) =
-  if path.len > 0:
-    writeFile(path, $node)
-
-proc scoresJson(ticks: int): JsonNode =
+proc scoresJson(ticks: int, truncationReason: string): JsonNode =
   var
     names = newJArray()
     scores = newJArray()
     survivalTicks = newJArray()
+    slotNames: array[QuestLeaguePlayerCount, string]
+    slotTicks: array[QuestLeaguePlayerCount, int]
+  for slot in 0 ..< QuestLeaguePlayerCount:
+    slotNames[slot] =
+      if slot < surface.playerNames.len: surface.playerNames[slot]
+      else: "adventurer_" & $slot
   withLock surface.lock:
     for score in surface.completedScores:
-      names.add(%score.name)
-      scores.add(%score.survivalTicks)
-      survivalTicks.add(%score.survivalTicks)
+      if score.slot >= 0 and score.slot < QuestLeaguePlayerCount:
+        slotNames[score.slot] = score.name
+        slotTicks[score.slot] = score.survivalTicks
     for _, viewer in surface.viewers.pairs:
-      names.add(%viewer.name)
-      scores.add(%viewer.survivalTicks)
-      survivalTicks.add(%viewer.survivalTicks)
+      if viewer.slot >= 0 and viewer.slot < QuestLeaguePlayerCount:
+        slotNames[viewer.slot] = viewer.name
+        slotTicks[viewer.slot] = max(0, surface.engine[].tick -
+            viewer.startTick)
+  for slot in 0 ..< QuestLeaguePlayerCount:
+    names.add(%slotNames[slot])
+    scores.add(%slotTicks[slot])
+    survivalTicks.add(%slotTicks[slot])
   %*{
-    "runtime": "fortress",
-    "ticks": ticks,
+    "mode": "quest",
+    "steps": ticks,
+    "truncation_reason": truncationReason,
     "names": names,
     "scores": scores,
-    "survival_ticks": survivalTicks,
-    "adventurer_slots": surface.engine[].adventurerSlots
+    "survival_ticks": survivalTicks
   }
 
-proc runLoop(): int =
+proc connectedQuestPlayerCount*(): int =
+  if not surfaceIsInitialized():
+    return 0
+  withLock surface.lock:
+    result = surface.viewers.len
+
+proc waitForQuestPlayers(expected: int, timeoutSeconds: float) =
+  if expected <= 0 or timeoutSeconds <= 0:
+    return
+  let deadline = getMonoTime() + initDuration(
+    milliseconds = int64(timeoutSeconds * 1000.0)
+  )
+  while connectedQuestPlayerCount() < expected and getMonoTime() < deadline:
+    sleep(20)
+
+proc runLoop(stepSeconds: float, renderEverySteps: int): int =
   var previousTick = getMonoTime()
-  while surface.engine[].maxSteps <= 0 or surface.engine[].tick < surface.engine[].maxSteps:
-    discard tickQuestAdventurerSurface()
+  while surface.engine[].maxSteps <= 0 or surface.engine[].tick <
+      surface.engine[].maxSteps:
+    submitQuestAdventurerInputs()
+    surface.engine[].step()
     inc result
-    let elapsed = inMilliseconds(getMonoTime() - previousTick)
-    if elapsed < StepMilliseconds:
-      sleep(StepMilliseconds - elapsed.int)
+    if result mod renderEverySteps == 0 or
+        surface.engine[].tick >= surface.engine[].maxSteps:
+      sendQuestAdventurerFrames(buildQuestAdventurerFrames())
+    let
+      targetMilliseconds = int(stepSeconds * 1000.0)
+      elapsed = inMilliseconds(getMonoTime() - previousTick).int
+    if elapsed < targetMilliseconds:
+      sleep(targetMilliseconds - elapsed)
     previousTick = getMonoTime()
 
 proc initQuestAdventurerSurface*(
   engine: var FortressEngine,
-  tokens: seq[string]
+  tokens: seq[string],
+  playerNames: seq[string] = @[],
+  fortressDataDir = "data"
 ) =
   ## Installs Quest's adventurer controls onto an existing Fortress engine.
   if tokens.len > engine.adventurerSlots:
     raise newException(ValueError, "more player tokens than adventurer slots")
+  if playerNames.len notin [0, tokens.len]:
+    raise newException(ValueError, "player names must be empty or match player tokens")
   initLock(surface.lock)
   surface.engine = addr engine
   surface.tokens = tokens
+  surface.playerNames = playerNames
   surface.viewers = initTable[WebSocket, ViewerState]()
   surface.closedSockets = @[]
   surface.completedScores = @[]
-  surface.spriteRegistry = initQuestSpriteRegistry()
+  surface.spriteRegistry = initQuestSpriteRegistry(fortressDataDir)
 
 proc runQuestPlayerSurface*(
   engine: var FortressEngine,
@@ -402,10 +442,13 @@ proc runQuestPlayerSurface*(
   saveReplayPath: string,
   saveScoresPath: string,
   tokens: seq[string],
-  maxGames: int
+  playerNames: seq[string],
+  stepSeconds: float,
+  playerConnectTimeoutSeconds: float,
+  renderEverySteps: int,
+  fortressDataDir = "data"
 ) =
-  discard maxGames
-  initQuestAdventurerSurface(engine, tokens)
+  initQuestAdventurerSurface(engine, tokens, playerNames, fortressDataDir)
 
   let httpServer = newServer(
     httpHandler,
@@ -424,11 +467,17 @@ proc runQuestPlayerSurface*(
   httpServer.waitUntilReady()
   echo "Tribal Quest player surface listening on http://", address, ":", port
 
-  let ticks = runLoop()
+  waitForQuestPlayers(tokens.len, playerConnectTimeoutSeconds)
+  let ticks = runLoop(stepSeconds, renderEverySteps)
   httpServer.close()
   joinThread(serverThread)
-  writeJsonFile(saveScoresPath, scoresJson(ticks))
-  writeJsonFile(saveReplayPath, %*{
-    "runtime": "fortress",
-    "ticks": ticks
-  })
+  writeCoworldJson(
+    saveScoresPath,
+    scoresJson(ticks, "max_steps"),
+    "COGAME_RESULTS_METHOD"
+  )
+  writeCoworldJson(saveReplayPath, %*{
+    "mode": "quest",
+    "steps": ticks,
+    "truncation_reason": "max_steps"
+  }, "COGAME_SAVE_REPLAY_METHOD")

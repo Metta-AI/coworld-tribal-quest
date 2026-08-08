@@ -1,11 +1,11 @@
 # Tribal Quest / Fortress Shared Engine Contract
 
-Last updated: 2026-06-01
+Last updated: 2026-08-08
 
 ## Canonical Shape
 
-Tribal Quest is the adventurer Coworld game. Tribal Fortress is the shared world
-engine and fortress/town Coworld game.
+Tribal Quest is the adventurer league mode. Tribal Fortress owns the shared
+Coworld artifact, world engine, and fortress/town league mode.
 
 - A single world host owns one authoritative `FortressEngine` instance.
 - Quest owns its public `/player` adventurer route.
@@ -24,8 +24,8 @@ same engine object.
 
 ## Fortress Must Provide
 
-Quest expects `TRIBAL_FORTRESS_PATH/src` to expose a Nim module named
-`tribal_village_engine`.
+Quest expects the build-time Nim path to expose a module named
+`tribal_fortress_engine`.
 
 The module should provide a small API:
 
@@ -75,7 +75,7 @@ JSON action or observation path in Quest.
 
 ## Quest Must Provide
 
-Quest imports `tribal_village_engine` and provides an adventurer surface that
+Quest imports `tribal_fortress_engine` and provides an adventurer surface that
 can be installed onto a host-owned engine. In a Quest-only development run,
 Quest may create the engine first and then install the same surface.
 
@@ -168,7 +168,7 @@ parallel Quest simulation.
 ## Defaults
 
 - world size: `768 x 480`
-- town agents per team: `200`
+- town agents per team: derived directly from the Fortress Nim engine default
 - adventurer slots: `64`
 - Quest adventurer crop: `21 x 21`
 - Quest sprite tile size: `16 px`
@@ -180,10 +180,10 @@ Quest-side checks:
 ```sh
 nim r --path:src tests/tests.nim
 TRIBAL_FORTRESS_PATH=${TRIBAL_FORTRESS_PATH:-$(pwd)/../coworld-tribal-fortress}
-nim c --path:src --path:$TRIBAL_FORTRESS_PATH/src -o:out/tribal_quest src/tribal_quest.nim
+bash scripts/test_with_fortress.sh
 git diff --check
 ```
 
-If `tribal_village_engine` is missing from the Fortress checkout, the build
+If `tribal_fortress_engine` is missing from the Fortress checkout, the build
 should fail immediately on that import. Do not revive local Quest simulation or
 add a Python bridge to make it pass.
