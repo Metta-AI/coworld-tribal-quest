@@ -1,10 +1,13 @@
 out/
 nimcache/
 .nimble/
+nim.cfg
+nimble.paths
+nimble.develop
 *.exe
 *.dSYM/
 __pycache__/
 *.pyc
+.venv/
 .DS_Store
 .playwright-cli/
-
