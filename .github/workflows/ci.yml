@@ -23,6 +23,7 @@ jobs:
             https://github.com/treeform/nimby/releases/download/0.1.26/nimby-Linux-X64
           chmod +x /usr/local/bin/nimby
           nimby use 2.2.10
+          chmod +x "$HOME/.nimby/nim/bin/"*
           echo "$HOME/.nimby/nim/bin" >> "$GITHUB_PATH"
 
       - name: Install dependencies
