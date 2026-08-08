@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Tribal Quest Global View</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    body { margin: 2rem auto; max-width: 70rem; padding: 0 1rem; background: #111713; color: #edf6ee; }
+    header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+    #status { color: #aad0ae; }
+    table { width: 100%; border-collapse: collapse; background: #19221b; }
+    th, td { padding: .65rem; border-bottom: 1px solid #344438; text-align: left; }
+    th { color: #b7dabb; }
+    .alive { color: #87e78f; }
+    .waiting, .done { color: #d8b87a; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Tribal Quest Global View</h1>
+    <div id="status">connecting</div>
+  </header>
+  <table>
+    <thead><tr><th>Adventurer</th><th>State</th><th>Team</th><th>Position</th><th>HP</th><th>Score</th><th>Survival</th><th>Explored</th></tr></thead>
+    <tbody id="adventurers"></tbody>
+  </table>
+  <script>
+    const statusNode = document.getElementById("status");
+    const bodyNode = document.getElementById("adventurers");
+    const scheme = location.protocol === "https:" ? "wss" : "ws";
+    const socket = new WebSocket(`${scheme}://${location.host}/global`);
+    socket.onmessage = event => {
+      const frame = JSON.parse(event.data);
+      const status = frame.status;
+      statusNode.textContent = `${status.phase} — step ${status.step}/${status.max_steps} — ${status.connected_players}/${status.expected_players} connected`;
+      bodyNode.replaceChildren(...frame.adventurers.map(adventurer => {
+        const row = document.createElement("tr");
+        const state = adventurer.alive ? "alive" : adventurer.connected ? "done" : "waiting";
+        const values = [adventurer.name, state, adventurer.team_id, `${adventurer.x}, ${adventurer.y}`, `${adventurer.hp}/${adventurer.max_hp}`, adventurer.score, adventurer.survival_ticks, adventurer.explored_tiles];
+        for (const value of values) {
+          const cell = document.createElement("td");
+          cell.textContent = value;
+          row.appendChild(cell);
+        }
+        row.children[1].className = state;
+        return row;
+      }));
+    };
+    socket.onclose = () => { statusNode.textContent = "disconnected"; };
+  </script>
+</body>
+</html>

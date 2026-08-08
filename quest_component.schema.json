@@ -17,12 +17,13 @@
     "config_contract",
     "results_contract",
     "replay_contract",
+    "global_contract",
     "protocol",
     "player_route"
   ],
   "properties": {
     "$schema": { "const": "./quest_component.schema.json" },
-    "component_version": { "const": 1 },
+    "component_version": { "const": 2 },
     "component": { "const": "tribal_quest" },
     "coworld": { "const": "tribal_fortress" },
     "mode": { "const": "quest" },
@@ -108,6 +109,26 @@
         "load_env": { "const": "COGAME_LOAD_REPLAY_URI" },
         "client_route": { "const": "/client/replay" },
         "stream_route": { "const": "/replay" },
+        "message_type": { "const": "text/json" }
+      }
+    },
+    "global_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "client_route",
+        "stream_route",
+        "protocol",
+        "init_type",
+        "update_type",
+        "message_type"
+      ],
+      "properties": {
+        "client_route": { "const": "/client/global" },
+        "stream_route": { "const": "/global" },
+        "protocol": { "const": "tribal-quest-global-v1" },
+        "init_type": { "const": "view.init" },
+        "update_type": { "const": "view.update" },
         "message_type": { "const": "text/json" }
       }
     },

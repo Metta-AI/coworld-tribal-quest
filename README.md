@@ -16,6 +16,8 @@ interface Fortress consumes when assembling that artifact.
 
 - Fortress owns one authoritative `FortressEngine` and all world simulation.
 - Quest mounts `/player` adventurer controls onto that engine.
+- Quest exposes a read-only global spectator at `/client/global` backed by the
+  `/global` websocket; it never owns or advances a second simulation.
 - The shared host submits town and adventurer inputs, steps the engine once,
   then renders both surfaces from the same post-step state.
 - `src/tribal_quest.nim` is also a useful Quest-only development host. It starts
@@ -65,9 +67,12 @@ bash scripts/test_with_fortress.sh
 
 The integration script compiles the Quest host and bundled adventurer, runs a
 typed engine/render test, starts a one-step shared-contract episode, and checks
-the differentiated scoring and result envelopes. It then starts the binary in
-Coworld replay-load mode and verifies `/healthz`, `/client/replay`, and a real
-`/replay` websocket message. The canonical exact-revision integration and
+the differentiated scoring and result envelopes. It then runs a live episode
+that proves `/client/global`, the immediate `view.init`, an authoritative
+post-step `view.update`, and a connected adventurer's state. Finally it starts
+the binary in Coworld replay-load mode and verifies `/healthz`,
+`/client/replay`, and a real `/replay` websocket message. The canonical
+exact-revision integration and
 image gate runs in Fortress CI after Fortress pins a public Quest commit.
 Quest's public CI validates the descriptor, protocol, HTTP artifact I/O, and
 formatting without attempting to read the private Fortress repo.
@@ -97,6 +102,8 @@ nim c --path:src --path:$TRIBAL_FORTRESS_PATH/src \
 
 Then open
 `http://127.0.0.1:2000/client/player?slot=0&name=human&reconnect=2`,
+watch the read-only global view at
+`http://127.0.0.1:2000/client/global`,
 or run the bundled pilot:
 
 ```sh
@@ -108,6 +115,10 @@ nim c --path:src -o:out/tribal_quest_adventurer \
 
 The sprite client uses a 21 by 21 adventurer-centered crop at 16 pixels per
 tile. Missing art renders as labeled placeholders rather than a blank frame.
+The global websocket sends a JSON `view.init` immediately, followed by
+`view.update` after each authoritative engine step. Both use protocol
+`tribal-quest-global-v1` and contain fixed-eight adventurer snapshots plus
+scores, survival ticks, and explored-tile counts.
 
 ## Project layout
 

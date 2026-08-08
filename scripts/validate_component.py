@@ -24,6 +24,7 @@ EXPECTED_TOP_LEVEL = {
     "config_contract",
     "results_contract",
     "replay_contract",
+    "global_contract",
     "protocol",
     "player_route",
 }
@@ -54,7 +55,7 @@ def main() -> None:
     schema = json.loads(SCHEMA.read_text())
     assert set(descriptor) == EXPECTED_TOP_LEVEL
     assert descriptor["$schema"] == "./quest_component.schema.json"
-    assert descriptor["component_version"] == 1
+    assert descriptor["component_version"] == 2
     assert descriptor["component"] == "tribal_quest"
     assert descriptor["coworld"] == "tribal_fortress"
     assert descriptor["mode"] == "quest"
@@ -80,6 +81,14 @@ def main() -> None:
         "load_env": "COGAME_LOAD_REPLAY_URI",
         "client_route": "/client/replay",
         "stream_route": "/replay",
+        "message_type": "text/json",
+    }
+    assert descriptor["global_contract"] == {
+        "client_route": "/client/global",
+        "stream_route": "/global",
+        "protocol": "tribal-quest-global-v1",
+        "init_type": "view.init",
+        "update_type": "view.update",
         "message_type": "text/json",
     }
     assert schema["properties"]["config_contract"]["properties"]["required"][

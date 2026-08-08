@@ -1,6 +1,6 @@
 {
   "$schema": "./quest_component.schema.json",
-  "component_version": 1,
+  "component_version": 2,
   "component": "tribal_quest",
   "coworld": "tribal_fortress",
   "mode": "quest",
@@ -49,6 +49,14 @@
     "load_env": "COGAME_LOAD_REPLAY_URI",
     "client_route": "/client/replay",
     "stream_route": "/replay",
+    "message_type": "text/json"
+  },
+  "global_contract": {
+    "client_route": "/client/global",
+    "stream_route": "/global",
+    "protocol": "tribal-quest-global-v1",
+    "init_type": "view.init",
+    "update_type": "view.update",
     "message_type": "text/json"
   },
   "protocol": "sprite_v1",

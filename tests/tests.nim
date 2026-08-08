@@ -1,6 +1,7 @@
-import std/[json, os, sets]
+import std/[json, os, sets, strutils]
 
 import tribal_quest/contract
+import tribal_quest/client
 import tribal_quest/protocol
 import tribal_quest/scoring
 import tribal_quest/sprite_packets
@@ -77,6 +78,8 @@ proc testComponentDescriptor() =
     league = component["league"]
     config = component["config_contract"]
     results = component["results_contract"]
+    globalContract = component["global_contract"]
+  doAssert component["component_version"].getInt() == 2
   doAssert component["component"].getStr() == "tribal_quest"
   doAssert component["coworld"].getStr() == "tribal_fortress"
   doAssert component["mode"].getStr() == "quest"
@@ -85,7 +88,19 @@ proc testComponentDescriptor() =
   doAssert league["player_count"].getInt() == QuestLeaguePlayerCount
   doAssert config["required"].len == 9
   doAssert results["score_count"].getInt() == QuestLeaguePlayerCount
+  doAssert globalContract["client_route"].getStr() == GlobalClientRoute
+  doAssert globalContract["stream_route"].getStr() == "/global"
+  doAssert globalContract["protocol"].getStr() == "tribal-quest-global-v1"
+  doAssert globalContract["init_type"].getStr() == "view.init"
+  doAssert globalContract["update_type"].getStr() == "view.update"
   doAssert not fileExists(RootDir / "coworld_manifest.json")
+
+proc testGlobalClientAsset() =
+  let body = clientStaticBody(GlobalClientRoute)
+  doAssert "Tribal Quest Global View" in body
+  doAssert "/global" in body
+  doAssert clientStaticContentType(GlobalClientRoute) ==
+    "text/html; charset=utf-8"
 
 when isMainModule:
   testAdventurerInputPayloads()
@@ -93,4 +108,5 @@ when isMainModule:
   testGeneratedSpritePlaceholder()
   testExploreAndSurviveScoring()
   testComponentDescriptor()
+  testGlobalClientAsset()
   echo "All tests passed"

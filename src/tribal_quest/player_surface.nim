@@ -10,6 +10,8 @@ import
 
 const
   PlayerSocketPath = "/player"
+  GlobalSocketPath = "/global"
+  GlobalProtocol = "tribal-quest-global-v1"
 
 type
   QuestPlayerFrame* = tuple[websocket: WebSocket, frame: string]
@@ -32,7 +34,9 @@ type
     tokens: seq[string]
     playerNames: seq[string]
     viewers: Table[WebSocket, ViewerState]
+    globalViewers: HashSet[WebSocket]
     closedSockets: seq[WebSocket]
+    closedGlobalSockets: seq[WebSocket]
     completedScores: seq[PlayerScore]
     spriteRegistry: QuestSpriteRegistry
 
@@ -152,6 +156,85 @@ proc upgradeRequiredHeaders(): HttpHeaders =
   result["Connection"] = "Upgrade"
   result["Upgrade"] = "websocket"
 
+proc globalSnapshotUnlocked(frameType: string): JsonNode =
+  var
+    names: array[QuestLeaguePlayerCount, string]
+    progresses: array[QuestLeaguePlayerCount, QuestProgress]
+    connected: array[QuestLeaguePlayerCount, bool]
+    adventurers = newJArray()
+    scores = newJArray()
+    survivalTicks = newJArray()
+    exploredTiles = newJArray()
+
+  for slot in 0 ..< QuestLeaguePlayerCount:
+    names[slot] =
+      if slot < surface.playerNames.len: surface.playerNames[slot]
+      else: "adventurer_" & $slot
+  for score in surface.completedScores:
+    if score.slot >= 0 and score.slot < QuestLeaguePlayerCount:
+      names[score.slot] = score.name
+      progresses[score.slot] = score.progress
+  for _, viewer in surface.viewers.pairs:
+    if viewer.slot >= 0 and viewer.slot < QuestLeaguePlayerCount:
+      names[viewer.slot] = viewer.name
+      progresses[viewer.slot] = viewer.progress
+      connected[viewer.slot] = true
+
+  var connectedPlayers = 0
+  for slot in 0 ..< QuestLeaguePlayerCount:
+    if connected[slot]:
+      inc connectedPlayers
+    var cells: array[QuestAdventureCropTiles * QuestAdventureCropTiles, uint8]
+    let
+      view = surface.engine[].adventurerViewCells(slot, cells)
+      alive = connected[slot] and view.ok and not view.done
+      done = connected[slot] and view.done
+      score = progresses[slot].questScore()
+      explored = progresses[slot].exploredTiles()
+    adventurers.add(%*{
+      "slot": slot,
+      "name": names[slot],
+      "connected": connected[slot],
+      "alive": alive,
+      "done": done,
+      "team_id": view.teamId,
+      "x": view.x,
+      "y": view.y,
+      "hp": view.hp,
+      "max_hp": view.maxHp,
+      "score": score,
+      "survival_ticks": progresses[slot].survivalTicks,
+      "explored_tiles": explored
+    })
+    scores.add(%score)
+    survivalTicks.add(%progresses[slot].survivalTicks)
+    exploredTiles.add(%explored)
+
+  let
+    finished = surface.engine[].maxSteps > 0 and
+      surface.engine[].tick >= surface.engine[].maxSteps
+    phase =
+      if finished: "finished"
+      elif surface.engine[].tick > 0: "running"
+      elif connectedPlayers < surface.tokens.len: "waiting_for_players"
+      else: "ready"
+  %*{
+    "type": frameType,
+    "protocol": GlobalProtocol,
+    "mode": "quest",
+    "status": {
+      "phase": phase,
+      "step": surface.engine[].tick,
+      "max_steps": surface.engine[].maxSteps,
+      "connected_players": connectedPlayers,
+      "expected_players": surface.tokens.len
+    },
+    "adventurers": adventurers,
+    "scores": scores,
+    "survival_ticks": survivalTicks,
+    "explored_tiles": exploredTiles
+  }
+
 proc handleQuestAdventurerHttp*(request: Request): bool {.gcsafe.} =
   ## Handles Quest-owned adventurer routes for a host that already owns
   ## the Fortress engine/world. Returns false when the route is not ours.
@@ -204,14 +287,54 @@ proc handleQuestAdventurerHttp*(request: Request): bool {.gcsafe.} =
         )
     return
 
-  if request.path in [PlayerClientRoute, PlayerClientHtmlRoute] and
+  if request.path == GlobalSocketPath and request.httpMethod == "GET":
+    result = true
+    if not surfaceIsInitialized():
+      request.respond(
+        500,
+        textHeaders(),
+        "Quest adventurer surface is not initialized\n"
+      )
+      return
+    if not request.isWebSocketUpgrade():
+      request.respond(
+        426,
+        upgradeRequiredHeaders(),
+        "websocket upgrade required\n"
+      )
+      return
+    var
+      websocket: WebSocket
+      initialFrame: string
+    {.gcsafe.}:
+      withLock surface.lock:
+        websocket = request.upgradeToWebSocket()
+        surface.globalViewers.incl(websocket)
+        initialFrame = $globalSnapshotUnlocked("view.init")
+    try:
+      websocket.send(initialFrame, TextMessage)
+    except CatchableError:
+      {.gcsafe.}:
+        withLock surface.lock:
+          surface.closedGlobalSockets.add(websocket)
+    return
+
+  if request.path in [
+      PlayerClientRoute,
+      PlayerClientHtmlRoute,
+      GlobalClientRoute,
+      GlobalClientHtmlRoute
+  ] and
       request.httpMethod == "GET":
     result = true
     try:
       request.respond(
         200,
         textHeaders(clientStaticContentType(request.path)),
-        playerClientHtml()
+        if request.path in [PlayerClientRoute, PlayerClientHtmlRoute]:
+          playerClientHtml()
+        else:
+          clientStaticBody(request.path)
       )
     except IOError:
       request.respond(404, textHeaders(), "client not found\n")
@@ -266,7 +389,10 @@ proc handleQuestAdventurerWebSocket*(
   of ErrorEvent, CloseEvent:
     {.gcsafe.}:
       withLock surface.lock:
-        surface.closedSockets.add(websocket)
+        if websocket in surface.globalViewers:
+          surface.closedGlobalSockets.add(websocket)
+        else:
+          surface.closedSockets.add(websocket)
 
 proc websocketHandler(
   websocket: WebSocket,
@@ -286,6 +412,9 @@ proc rememberScore(viewer: ViewerState) =
   ))
 
 proc pruneClosedViewers() =
+  for websocket in surface.closedGlobalSockets:
+    surface.globalViewers.excl(websocket)
+  surface.closedGlobalSockets.setLen(0)
   for websocket in surface.closedSockets:
     if websocket in surface.viewers:
       let slot = surface.viewers[websocket].slot
@@ -359,10 +488,31 @@ proc sendQuestAdventurerFrames*(frames: openArray[QuestPlayerFrame]) =
       withLock surface.lock:
         surface.closedSockets.add(item.websocket)
 
+proc broadcastQuestGlobalView*() =
+  ## Publishes a read-only snapshot derived from the authoritative shared
+  ## Fortress engine and Quest's recorded scoring progress.
+  if not surfaceIsInitialized():
+    raise newException(ValueError, "Quest adventurer surface is not initialized")
+  var
+    viewers: seq[WebSocket]
+    frame: string
+  withLock surface.lock:
+    pruneClosedViewers()
+    frame = $globalSnapshotUnlocked("view.update")
+    for websocket in surface.globalViewers:
+      viewers.add(websocket)
+  for websocket in viewers:
+    try:
+      websocket.send(frame, TextMessage)
+    except CatchableError:
+      withLock surface.lock:
+        surface.closedGlobalSockets.add(websocket)
+
 proc tickQuestAdventurerSurface*(): int =
   ## Convenience one-process tick: submit Quest inputs, step the shared engine,
   ## render Quest frames, and send them. Combined hosts should call the pieces.
   let frames = stepAndBuildFrames()
+  broadcastQuestGlobalView()
   sendQuestAdventurerFrames(frames)
   frames.len
 
@@ -425,6 +575,7 @@ proc runLoop(stepSeconds: float, renderEverySteps: int): int =
     surface.engine[].step()
     observeQuestAdventurerProgress()
     inc result
+    broadcastQuestGlobalView()
     if result mod renderEverySteps == 0 or
         surface.engine[].tick >= surface.engine[].maxSteps:
       sendQuestAdventurerFrames(buildQuestAdventurerFrames())
@@ -451,7 +602,9 @@ proc initQuestAdventurerSurface*(
   surface.tokens = tokens
   surface.playerNames = playerNames
   surface.viewers = initTable[WebSocket, ViewerState]()
+  surface.globalViewers = initHashSet[WebSocket]()
   surface.closedSockets = @[]
+  surface.closedGlobalSockets = @[]
   surface.completedScores = @[]
   surface.spriteRegistry = initQuestSpriteRegistry(fortressDataDir)
 
