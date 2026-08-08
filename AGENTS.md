@@ -24,6 +24,7 @@ bash scripts/test_with_fortress.sh
 git diff --check
 ```
 
-`fortress.lock` identifies the exact Fortress revision used in CI and the
-development image. If the engine module or typed API is missing at that
-revision, fail loudly; never add another runtime to make the build pass.
+The canonical exact-revision integration and image gate runs in Fortress CI,
+which pins public Quest. Public Quest CI cannot read the private Fortress repo.
+If the engine module or typed API is missing from a local sibling checkout,
+fail loudly; never add another runtime to make the build pass.

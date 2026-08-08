@@ -1,4 +1,6 @@
 # syntax=docker/dockerfile:1
+FROM fortress AS fortress-source
+
 FROM debian:bookworm-slim AS build
 
 RUN apt-get update && \
@@ -24,12 +26,7 @@ RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
 ENV PATH="/root/.nimby/nim/bin:$PATH"
 
 WORKDIR /workspace
-COPY fortress.lock /tmp/fortress.lock
-RUN --mount=type=secret,id=github_token \
-  github_token="$(cat /run/secrets/github_token)" && \
-  git clone \
-    "https://x-access-token:${github_token}@github.com/Metta-AI/coworld-tribal-fortress.git" && \
-  git -C coworld-tribal-fortress checkout "$(tr -d '\n' </tmp/fortress.lock)"
+COPY --from=fortress-source / ./coworld-tribal-fortress
 
 WORKDIR /workspace/coworld-tribal-fortress
 RUN nimby sync -g nimby.lock

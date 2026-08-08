@@ -61,16 +61,17 @@ bash scripts/test_with_fortress.sh
 
 The integration script compiles the Quest host and bundled adventurer, runs a
 typed engine/render test, starts a one-step shared-contract episode, and checks
-the result and replay envelopes. CI checks out the exact Fortress commit in
-[`fortress.lock`](fortress.lock) before running the same proof and building the
-development image.
+the result and replay envelopes. The canonical exact-revision integration and
+image gate runs in Fortress CI after Fortress pins a public Quest commit.
+Quest's public CI validates the descriptor, protocol, HTTP artifact I/O, and
+formatting without attempting to read the private Fortress repo.
 
-Because Fortress is private, an independent development-image build passes a
-GitHub token as a BuildKit secret (the token is not stored in an image layer):
+Build the development image with the local sibling Fortress checkout as a
+BuildKit named context:
 
 ```sh
-DOCKER_BUILDKIT=1 docker build \
-  --secret id=github_token,env=GITHUB_TOKEN \
+docker build \
+  --build-context fortress=../coworld-tribal-fortress \
   -t tribal-quest-component:dev .
 ```
 

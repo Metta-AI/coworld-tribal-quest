@@ -9,15 +9,6 @@ if [[ ! -f "$fortress_root/src/tribal_fortress_engine.nim" ]]; then
   exit 1
 fi
 
-if [[ "${REQUIRE_LOCKED_FORTRESS:-0}" == "1" ]]; then
-  expected=$(tr -d '\n' <"$quest_root/fortress.lock")
-  actual=$(git -C "$fortress_root" rev-parse HEAD)
-  if [[ "$actual" != "$expected" ]]; then
-    echo "Fortress checkout is $actual, expected locked commit $expected" >&2
-    exit 1
-  fi
-fi
-
 mkdir -p "$quest_root/out"
 nim c \
   -d:release \

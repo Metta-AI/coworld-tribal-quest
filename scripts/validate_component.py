@@ -4,14 +4,12 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 DESCRIPTOR = ROOT / "quest_component.json"
 SCHEMA = ROOT / "quest_component.schema.json"
-LOCK = ROOT / "fortress.lock"
 
 EXPECTED_TOP_LEVEL = {
     "$schema",
@@ -82,7 +80,6 @@ def main() -> None:
         "const"
     ] == EXPECTED_RESULTS
     assert not (ROOT / "coworld_manifest.json").exists()
-    assert re.fullmatch(r"[0-9a-f]{40}\n?", LOCK.read_text())
     print("Quest component contract is valid")
 
 
