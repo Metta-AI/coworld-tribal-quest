@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM debian:bookworm-slim AS build
 
 RUN apt-get update && \
@@ -24,7 +25,10 @@ ENV PATH="/root/.nimby/nim/bin:$PATH"
 
 WORKDIR /workspace
 COPY fortress.lock /tmp/fortress.lock
-RUN git clone https://github.com/Metta-AI/coworld-tribal-fortress.git && \
+RUN --mount=type=secret,id=github_token \
+  github_token="$(cat /run/secrets/github_token)" && \
+  git clone \
+    "https://x-access-token:${github_token}@github.com/Metta-AI/coworld-tribal-fortress.git" && \
   git -C coworld-tribal-fortress checkout "$(tr -d '\n' </tmp/fortress.lock)"
 
 WORKDIR /workspace/coworld-tribal-fortress

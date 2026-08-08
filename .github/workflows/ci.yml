@@ -26,14 +26,19 @@ jobs:
           echo "$HOME/.nimby/nim/bin" >> "$GITHUB_PATH"
 
       - name: Check out the locked Fortress engine
+        uses: actions/checkout@v4
+        with:
+          repository: Metta-AI/coworld-tribal-fortress
+          path: fortress
+
+      - name: Select the locked Fortress revision
         run: |
           fortress_ref=$(tr -d '\n' < fortress.lock)
-          git clone https://github.com/Metta-AI/coworld-tribal-fortress.git ../coworld-tribal-fortress
-          git -C ../coworld-tribal-fortress checkout "$fortress_ref"
+          git -C fortress checkout "$fortress_ref"
 
       - name: Install dependencies
         run: |
-          nimby sync -g ../coworld-tribal-fortress/nimby.lock
+          nimby sync -g fortress/nimby.lock
           nimble refresh
           nimble install -y --depsOnly
 
@@ -48,6 +53,7 @@ jobs:
       - name: Compile and smoke with the exact Fortress engine
         env:
           REQUIRE_LOCKED_FORTRESS: "1"
+          TRIBAL_FORTRESS_PATH: ${{ github.workspace }}/fortress
         run: bash scripts/test_with_fortress.sh
 
       - name: Check formatting and whitespace
@@ -57,4 +63,9 @@ jobs:
           git diff --check
 
       - name: Build development image
-        run: docker build --tag tribal-quest-component:test .
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DOCKER_BUILDKIT=1 docker build \
+            --secret id=github_token,env=GITHUB_TOKEN \
+            --tag tribal-quest-component:test .

@@ -65,6 +65,15 @@ the result and replay envelopes. CI checks out the exact Fortress commit in
 [`fortress.lock`](fortress.lock) before running the same proof and building the
 development image.
 
+Because Fortress is private, an independent development-image build passes a
+GitHub token as a BuildKit secret (the token is not stored in an image layer):
+
+```sh
+DOCKER_BUILDKIT=1 docker build \
+  --secret id=github_token,env=GITHUB_TOKEN \
+  -t tribal-quest-component:dev .
+```
+
 For an interactive local run:
 
 ```sh
