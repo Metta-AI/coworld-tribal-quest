@@ -1,7 +1,6 @@
 import
   std/[json, locks, monotimes, os, sets, strutils, tables, times],
   mummy,
-  types,
   tribal_quest/client,
   tribal_quest/coworld_io,
   tribal_quest/fortress_engine,
@@ -323,8 +322,7 @@ proc observeQuestAdventurerProgress*() =
       viewer.progress.observeQuestState(
         view.ok and not view.done,
         view.x,
-        view.y,
-        MapWidth
+        view.y
       )
 
 proc buildQuestAdventurerFrames*(): seq[QuestPlayerFrame] =

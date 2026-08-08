@@ -56,12 +56,12 @@ proc testExploreAndSurviveScoring() =
     deadEarly = initQuestProgress()
     stationary = initQuestProgress()
     explorer = initQuestProgress()
-  deadEarly.observeQuestState(true, 2, 2, 100)
-  deadEarly.observeQuestState(false, 3, 2, 100)
+  deadEarly.observeQuestState(true, 2, 2)
+  deadEarly.observeQuestState(false, 3, 2)
   for _ in 0 ..< 3:
-    stationary.observeQuestState(true, 4, 4, 100)
+    stationary.observeQuestState(true, 4, 4)
   for x in 4 .. 6:
-    explorer.observeQuestState(true, x, 4, 100)
+    explorer.observeQuestState(true, x, 4)
   doAssert deadEarly.survivalTicks == 1
   doAssert deadEarly.exploredTiles == 1
   doAssert stationary.survivalTicks == 3
