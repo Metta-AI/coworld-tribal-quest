@@ -97,6 +97,25 @@ protocol is gone; `/player` is sprite-only.
 
 Quest should not duplicate Fortress world simulation code.
 
+## Scoring and Replay
+
+Quest score truth is derived from the post-step `FortressAdventurerView`:
+
+```text
+score = survival_ticks + 10 * explored_tiles
+```
+
+`survival_ticks` advances only while the claimed adventurer is alive.
+`explored_tiles` counts unique authoritative world coordinates reached by that
+seat. Dead and dormant adventurers accrue neither value. The fixed eight-seat
+results and replay artifacts contain `scores`, `survival_ticks`, and
+`explored_tiles` arrays.
+
+The replay artifact uses `format: tribal-quest-replay-v1`. When
+`COGAME_LOAD_REPLAY_URI` is present, the same binary starts replay mode without
+creating an engine, serves `/healthz` and `/client/replay`, and sends the
+enriched replay as a JSON text message over `/replay`.
+
 The mountable surface API is:
 
 ```nim

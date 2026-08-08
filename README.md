@@ -43,9 +43,10 @@ The production entrypoint accepts the shared snake-case game config:
 ```
 
 It emits a fixed eight-seat result containing `mode`, `scores`, `steps`,
-`truncation_reason`, `names`, and `survival_ticks`. It intentionally accepts
-and ignores the shared `victory_condition` field, which applies only to
-Fortress mode.
+`truncation_reason`, `names`, `survival_ticks`, and `explored_tiles`. Scores
+combine alive survival ticks with unique tiles visited. Quest intentionally
+accepts and ignores the shared `victory_condition` field, which applies only
+to Fortress mode.
 
 ## Develop and test
 
@@ -61,7 +62,9 @@ bash scripts/test_with_fortress.sh
 
 The integration script compiles the Quest host and bundled adventurer, runs a
 typed engine/render test, starts a one-step shared-contract episode, and checks
-the result and replay envelopes. The canonical exact-revision integration and
+the differentiated scoring and result envelopes. It then starts the binary in
+Coworld replay-load mode and verifies `/healthz`, `/client/replay`, and a real
+`/replay` websocket message. The canonical exact-revision integration and
 image gate runs in Fortress CI after Fortress pins a public Quest commit.
 Quest's public CI validates the descriptor, protocol, HTTP artifact I/O, and
 formatting without attempting to read the private Fortress repo.

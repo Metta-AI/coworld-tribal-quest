@@ -1,10 +1,12 @@
 import
   std/[json, locks, monotimes, os, sets, strutils, tables, times],
   mummy,
+  types,
   tribal_quest/client,
   tribal_quest/coworld_io,
   tribal_quest/fortress_engine,
   tribal_quest/gridworld_sprites,
+  tribal_quest/scoring,
   tribal_quest/sprite_packets
 
 const
@@ -17,13 +19,13 @@ type
     slot: int
     name: string
     lastMask: uint8
-    startTick: int
+    progress: QuestProgress
     knownSprites: HashSet[int]
 
   PlayerScore = object
     slot: int
     name: string
-    survivalTicks: int
+    progress: QuestProgress
 
   SurfaceState = object
     lock: Lock
@@ -198,7 +200,7 @@ proc handleQuestAdventurerHttp*(request: Request): bool {.gcsafe.} =
           slot: slot,
           name: request.viewerName(slot),
           lastMask: 0,
-          startTick: surface.engine[].tick,
+          progress: initQuestProgress(),
           knownSprites: initHashSet[int]()
         )
     return
@@ -281,7 +283,7 @@ proc rememberScore(viewer: ViewerState) =
   surface.completedScores.add(PlayerScore(
     slot: viewer.slot,
     name: viewer.name,
-    survivalTicks: max(0, surface.engine[].tick - viewer.startTick)
+    progress: viewer.progress
   ))
 
 proc pruneClosedViewers() =
@@ -309,6 +311,22 @@ proc submitQuestAdventurerInputs*() =
     for _, viewer in surface.viewers.pairs:
       surface.engine[].submitAdventurerButtons(viewer.slot, viewer.lastMask)
 
+proc observeQuestAdventurerProgress*() =
+  ## Records score inputs from the post-step Fortress engine state.
+  if not surfaceIsInitialized():
+    raise newException(ValueError, "Quest adventurer surface is not initialized")
+  withLock surface.lock:
+    pruneClosedViewers()
+    for _, viewer in surface.viewers.mpairs:
+      var cells: array[QuestAdventureCropTiles * QuestAdventureCropTiles, uint8]
+      let view = surface.engine[].adventurerViewCells(viewer.slot, cells)
+      viewer.progress.observeQuestState(
+        view.ok and not view.done,
+        view.x,
+        view.y,
+        MapWidth
+      )
+
 proc buildQuestAdventurerFrames*(): seq[QuestPlayerFrame] =
   ## Builds player frames from the current post-step Fortress engine state.
   if not surfaceIsInitialized():
@@ -329,6 +347,7 @@ proc buildQuestAdventurerFrames*(): seq[QuestPlayerFrame] =
 proc stepAndBuildFrames(): seq[QuestPlayerFrame] =
   submitQuestAdventurerInputs()
   surface.engine[].step()
+  observeQuestAdventurerProgress()
   buildQuestAdventurerFrames()
 
 proc sendQuestAdventurerFrames*(frames: openArray[QuestPlayerFrame]) =
@@ -354,8 +373,9 @@ proc scoresJson(ticks: int, truncationReason: string): JsonNode =
     names = newJArray()
     scores = newJArray()
     survivalTicks = newJArray()
+    exploredTiles = newJArray()
     slotNames: array[QuestLeaguePlayerCount, string]
-    slotTicks: array[QuestLeaguePlayerCount, int]
+    slotProgress: array[QuestLeaguePlayerCount, QuestProgress]
   for slot in 0 ..< QuestLeaguePlayerCount:
     slotNames[slot] =
       if slot < surface.playerNames.len: surface.playerNames[slot]
@@ -364,23 +384,24 @@ proc scoresJson(ticks: int, truncationReason: string): JsonNode =
     for score in surface.completedScores:
       if score.slot >= 0 and score.slot < QuestLeaguePlayerCount:
         slotNames[score.slot] = score.name
-        slotTicks[score.slot] = score.survivalTicks
+        slotProgress[score.slot] = score.progress
     for _, viewer in surface.viewers.pairs:
       if viewer.slot >= 0 and viewer.slot < QuestLeaguePlayerCount:
         slotNames[viewer.slot] = viewer.name
-        slotTicks[viewer.slot] = max(0, surface.engine[].tick -
-            viewer.startTick)
+        slotProgress[viewer.slot] = viewer.progress
   for slot in 0 ..< QuestLeaguePlayerCount:
     names.add(%slotNames[slot])
-    scores.add(%slotTicks[slot])
-    survivalTicks.add(%slotTicks[slot])
+    scores.add(%slotProgress[slot].questScore())
+    survivalTicks.add(%slotProgress[slot].survivalTicks)
+    exploredTiles.add(%slotProgress[slot].exploredTiles())
   %*{
     "mode": "quest",
     "steps": ticks,
     "truncation_reason": truncationReason,
     "names": names,
     "scores": scores,
-    "survival_ticks": survivalTicks
+    "survival_ticks": survivalTicks,
+    "explored_tiles": exploredTiles
   }
 
 proc connectedQuestPlayerCount*(): int =
@@ -404,6 +425,7 @@ proc runLoop(stepSeconds: float, renderEverySteps: int): int =
       surface.engine[].maxSteps:
     submitQuestAdventurerInputs()
     surface.engine[].step()
+    observeQuestAdventurerProgress()
     inc result
     if result mod renderEverySteps == 0 or
         surface.engine[].tick >= surface.engine[].maxSteps:
@@ -476,8 +498,10 @@ proc runQuestPlayerSurface*(
     scoresJson(ticks, "max_steps"),
     "COGAME_RESULTS_METHOD"
   )
-  writeCoworldJson(saveReplayPath, %*{
-    "mode": "quest",
-    "steps": ticks,
-    "truncation_reason": "max_steps"
-  }, "COGAME_SAVE_REPLAY_METHOD")
+  let replay = scoresJson(ticks, "max_steps")
+  replay["format"] = %"tribal-quest-replay-v1"
+  writeCoworldJson(
+    saveReplayPath,
+    replay,
+    "COGAME_SAVE_REPLAY_METHOD"
+  )

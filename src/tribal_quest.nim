@@ -5,6 +5,7 @@ import tribal_quest/coworld_io
 import tribal_quest/fortress_engine
 import tribal_quest/player_surface
 import tribal_quest/protocol
+import tribal_quest/replay_surface
 
 type
   TribalQuestError = object of CatchableError
@@ -214,6 +215,19 @@ proc echoStartup(config: RunConfig) =
   echo "Steps per second: ", config.stepsPerSecond
 
 when isMainModule:
+  let replayLoadUri = getEnv("COGAME_LOAD_REPLAY_URI")
+  if replayLoadUri.len > 0:
+    let replay = parseJson(readCoworldData(
+      replayLoadUri,
+      "COGAME_LOAD_REPLAY_URI"
+    ))
+    runQuestReplaySurface(
+      replay,
+      getEnv("COGAME_HOST", "0.0.0.0"),
+      parseInt(getEnv("COGAME_PORT", $DefaultPort))
+    )
+    quit(0)
+
   var
     config = RunConfig(
       mode: "quest",

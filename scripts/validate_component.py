@@ -23,6 +23,7 @@ EXPECTED_TOP_LEVEL = {
     "league",
     "config_contract",
     "results_contract",
+    "replay_contract",
     "protocol",
     "player_route",
 }
@@ -44,6 +45,7 @@ EXPECTED_RESULTS = [
     "truncation_reason",
     "names",
     "survival_ticks",
+    "explored_tiles",
 ]
 
 
@@ -73,6 +75,13 @@ def main() -> None:
     ]
     assert descriptor["results_contract"]["required"] == EXPECTED_RESULTS
     assert descriptor["results_contract"]["score_count"] == 8
+    assert descriptor["replay_contract"] == {
+        "format": "tribal-quest-replay-v1",
+        "load_env": "COGAME_LOAD_REPLAY_URI",
+        "client_route": "/client/replay",
+        "stream_route": "/replay",
+        "message_type": "text/json",
+    }
     assert schema["properties"]["config_contract"]["properties"]["required"][
         "const"
     ] == EXPECTED_CONFIG

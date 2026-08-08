@@ -2,6 +2,7 @@ import std/[json, os, sets]
 
 import tribal_quest/contract
 import tribal_quest/protocol
+import tribal_quest/scoring
 import tribal_quest/sprite_packets
 
 const RootDir = currentSourcePath.parentDir.parentDir
@@ -50,6 +51,26 @@ proc testGeneratedSpritePlaceholder() =
       inc nonTransparent
   doAssert nonTransparent > 0
 
+proc testExploreAndSurviveScoring() =
+  var
+    deadEarly = initQuestProgress()
+    stationary = initQuestProgress()
+    explorer = initQuestProgress()
+  deadEarly.observeQuestState(true, 2, 2, 100)
+  deadEarly.observeQuestState(false, 3, 2, 100)
+  for _ in 0 ..< 3:
+    stationary.observeQuestState(true, 4, 4, 100)
+  for x in 4 .. 6:
+    explorer.observeQuestState(true, x, 4, 100)
+  doAssert deadEarly.survivalTicks == 1
+  doAssert deadEarly.exploredTiles == 1
+  doAssert stationary.survivalTicks == 3
+  doAssert stationary.exploredTiles == 1
+  doAssert explorer.survivalTicks == 3
+  doAssert explorer.exploredTiles == 3
+  doAssert explorer.questScore > stationary.questScore
+  doAssert stationary.questScore > deadEarly.questScore
+
 proc testComponentDescriptor() =
   let
     component = parseJson(readFile(RootDir / "quest_component.json"))
@@ -70,5 +91,6 @@ when isMainModule:
   testAdventurerInputPayloads()
   testSpritePacketConstruction()
   testGeneratedSpritePlaceholder()
+  testExploreAndSurviveScoring()
   testComponentDescriptor()
   echo "All tests passed"

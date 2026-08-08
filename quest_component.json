@@ -39,9 +39,17 @@
       "steps",
       "truncation_reason",
       "names",
-      "survival_ticks"
+      "survival_ticks",
+      "explored_tiles"
     ],
     "score_count": 8
+  },
+  "replay_contract": {
+    "format": "tribal-quest-replay-v1",
+    "load_env": "COGAME_LOAD_REPLAY_URI",
+    "client_route": "/client/replay",
+    "stream_route": "/replay",
+    "message_type": "text/json"
   },
   "protocol": "sprite_v1",
   "player_route": "/player"

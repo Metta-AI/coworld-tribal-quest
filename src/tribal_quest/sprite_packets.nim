@@ -91,7 +91,8 @@ proc addSprite*(
   for ch in label:
     packet.addU8(uint8(ord(ch)))
 
-proc addObject*(packet: var seq[uint8], objectId, x, y, z, layer, spriteId: int) =
+proc addObject*(packet: var seq[uint8], objectId, x, y, z, layer,
+    spriteId: int) =
   packet.addU8(SpriteMsgDefineObject)
   packet.addU16(objectId)
   packet.addI16(x)
@@ -165,13 +166,15 @@ proc colorFromKey*(key: string): tuple[r, g, b, a: uint8] =
     a: 255'u8
   )
 
-proc generatedSprite*(id: int, label: string, width = 16, height = 16): SpriteAsset =
+proc generatedSprite*(id: int, label: string, width = 16,
+    height = 16): SpriteAsset =
   let fill = colorFromKey(label)
   SpriteAsset(
     id: id,
     width: width,
     height: height,
-    pixels: rgbaTile(width, height, fill, (r: 24'u8, g: 24'u8, b: 28'u8, a: 255'u8)),
+    pixels: rgbaTile(width, height, fill, (r: 24'u8, g: 24'u8, b: 28'u8,
+        a: 255'u8)),
     label: label
   )
 

@@ -16,6 +16,7 @@
     "league",
     "config_contract",
     "results_contract",
+    "replay_contract",
     "protocol",
     "player_route"
   ],
@@ -85,10 +86,29 @@
             "steps",
             "truncation_reason",
             "names",
-            "survival_ticks"
+            "survival_ticks",
+            "explored_tiles"
           ]
         },
         "score_count": { "const": 8 }
+      }
+    },
+    "replay_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "format",
+        "load_env",
+        "client_route",
+        "stream_route",
+        "message_type"
+      ],
+      "properties": {
+        "format": { "const": "tribal-quest-replay-v1" },
+        "load_env": { "const": "COGAME_LOAD_REPLAY_URI" },
+        "client_route": { "const": "/client/replay" },
+        "stream_route": { "const": "/replay" },
+        "message_type": { "const": "text/json" }
       }
     },
     "protocol": { "const": "sprite_v1" },
