@@ -33,6 +33,7 @@ type
     engine: ptr FortressEngine
     tokens: seq[string]
     playerNames: seq[string]
+    playerCount: int
     viewers: Table[WebSocket, ViewerState]
     globalViewers: HashSet[WebSocket]
     closedSockets: seq[WebSocket]
@@ -158,30 +159,30 @@ proc upgradeRequiredHeaders(): HttpHeaders =
 
 proc globalSnapshotUnlocked(frameType: string): JsonNode =
   var
-    names: array[QuestLeaguePlayerCount, string]
-    progresses: array[QuestLeaguePlayerCount, QuestProgress]
-    connected: array[QuestLeaguePlayerCount, bool]
+    names = newSeq[string](surface.playerCount)
+    progresses = newSeq[QuestProgress](surface.playerCount)
+    connected = newSeq[bool](surface.playerCount)
     adventurers = newJArray()
     scores = newJArray()
     survivalTicks = newJArray()
     exploredTiles = newJArray()
 
-  for slot in 0 ..< QuestLeaguePlayerCount:
+  for slot in 0 ..< surface.playerCount:
     names[slot] =
       if slot < surface.playerNames.len: surface.playerNames[slot]
       else: "adventurer_" & $slot
   for score in surface.completedScores:
-    if score.slot >= 0 and score.slot < QuestLeaguePlayerCount:
+    if score.slot >= 0 and score.slot < surface.playerCount:
       names[score.slot] = score.name
       progresses[score.slot] = score.progress
   for _, viewer in surface.viewers.pairs:
-    if viewer.slot >= 0 and viewer.slot < QuestLeaguePlayerCount:
+    if viewer.slot >= 0 and viewer.slot < surface.playerCount:
       names[viewer.slot] = viewer.name
       progresses[viewer.slot] = viewer.progress
       connected[viewer.slot] = true
 
   var connectedPlayers = 0
-  for slot in 0 ..< QuestLeaguePlayerCount:
+  for slot in 0 ..< surface.playerCount:
     if connected[slot]:
       inc connectedPlayers
     var cells: array[QuestAdventureCropTiles * QuestAdventureCropTiles, uint8]
@@ -272,7 +273,7 @@ proc handleQuestAdventurerHttp*(request: Request): bool {.gcsafe.} =
           return
         let agentId = surface.engine[].claimAdventurer(
           slot,
-          slot mod QuestLeaguePlayerCount
+          slot
         )
         if agentId < 0:
           request.respond(409, textHeaders(), "could not claim adventurer\n")
@@ -522,22 +523,22 @@ proc scoresJson(ticks: int, truncationReason: string): JsonNode =
     scores = newJArray()
     survivalTicks = newJArray()
     exploredTiles = newJArray()
-    slotNames: array[QuestLeaguePlayerCount, string]
-    slotProgress: array[QuestLeaguePlayerCount, QuestProgress]
-  for slot in 0 ..< QuestLeaguePlayerCount:
+    slotNames = newSeq[string](surface.playerCount)
+    slotProgress = newSeq[QuestProgress](surface.playerCount)
+  for slot in 0 ..< surface.playerCount:
     slotNames[slot] =
       if slot < surface.playerNames.len: surface.playerNames[slot]
       else: "adventurer_" & $slot
   withLock surface.lock:
     for score in surface.completedScores:
-      if score.slot >= 0 and score.slot < QuestLeaguePlayerCount:
+      if score.slot >= 0 and score.slot < surface.playerCount:
         slotNames[score.slot] = score.name
         slotProgress[score.slot] = score.progress
     for _, viewer in surface.viewers.pairs:
-      if viewer.slot >= 0 and viewer.slot < QuestLeaguePlayerCount:
+      if viewer.slot >= 0 and viewer.slot < surface.playerCount:
         slotNames[viewer.slot] = viewer.name
         slotProgress[viewer.slot] = viewer.progress
-  for slot in 0 ..< QuestLeaguePlayerCount:
+  for slot in 0 ..< surface.playerCount:
     names.add(%slotNames[slot])
     scores.add(%slotProgress[slot].questScore())
     survivalTicks.add(%slotProgress[slot].survivalTicks)
@@ -595,12 +596,19 @@ proc initQuestAdventurerSurface*(
   ## Installs Quest's adventurer controls onto an existing Fortress engine.
   if tokens.len > engine.adventurerSlots:
     raise newException(ValueError, "more player tokens than adventurer slots")
+  if tokens.len != 0 and tokens.len notin
+      QuestLeagueMinPlayerCount .. QuestLeagueMaxPlayerCount:
+    raise newException(ValueError, "player token count must be between 2 and 8")
   if playerNames.len notin [0, tokens.len]:
     raise newException(ValueError, "player names must be empty or match player tokens")
   initLock(surface.lock)
   surface.engine = addr engine
   surface.tokens = tokens
   surface.playerNames = playerNames
+  surface.playerCount =
+    if tokens.len > 0: tokens.len
+    elif playerNames.len > 0: playerNames.len
+    else: QuestLeagueMaxPlayerCount
   surface.viewers = initTable[WebSocket, ViewerState]()
   surface.globalViewers = initHashSet[WebSocket]()
   surface.closedSockets = @[]

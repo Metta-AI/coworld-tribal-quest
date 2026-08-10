@@ -3,7 +3,8 @@
 Tribal Quest is the adventurer component and Quest league mode of the canonical
 `tribal_fortress` Coworld. Fortress and Quest ship in one immutable game image
 and use the same `FortressEngine` world simulation. The two leagues select the
-`fortress-8-town` and `quest-8-adventurer` variants respectively.
+matching `fortress-N-town` or `quest-N-adventurer` variant for an active roster
+of two through eight entrants.
 
 This repository is deliberately not a separately uploadable Coworld. It has no
 root `coworld_manifest.json`. The canonical manifest, image, certification, and
@@ -30,21 +31,20 @@ The production entrypoint accepts the shared snake-case game config:
 ```json
 {
   "mode": "quest",
-  "tokens": ["q0", "q1", "q2", "q3", "q4", "q5", "q6", "q7"],
+  "tokens": ["q0", "q1"],
   "players": [
-    {"name": "p0"}, {"name": "p1"}, {"name": "p2"}, {"name": "p3"},
-    {"name": "p4"}, {"name": "p5"}, {"name": "p6"}, {"name": "p7"}
+    {"name": "p0"}, {"name": "p1"}
   ],
   "max_steps": 18000,
   "seed": 726896,
   "steps_per_second": 10,
   "player_connect_timeout_seconds": 180,
-  "num_agents": 8,
-  "team_count": 8
+  "num_agents": 2,
+  "team_count": 2
 }
 ```
 
-It emits a fixed eight-seat result containing `mode`, `scores`, `steps`,
+It emits a result sized to the active two-to-eight-seat roster containing `mode`, `scores`, `steps`,
 `truncation_reason`, `names`, `survival_ticks`, and `explored_tiles`. Scores
 combine alive survival ticks with unique tiles visited. Quest intentionally
 accepts and ignores the shared `victory_condition` field, which applies only
@@ -117,7 +117,7 @@ The sprite client uses a 21 by 21 adventurer-centered crop at 16 pixels per
 tile. Missing art renders as labeled placeholders rather than a blank frame.
 The global websocket sends a JSON `view.init` immediately, followed by
 `view.update` after each authoritative engine step. Both use protocol
-`tribal-quest-global-v1` and contain fixed-eight adventurer snapshots plus
+`tribal-quest-global-v1` and contain one adventurer snapshot per active entrant plus
 scores, survival ticks, and explored-tile counts.
 
 ## Project layout

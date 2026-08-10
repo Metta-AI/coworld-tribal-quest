@@ -151,30 +151,33 @@ proc validate(config: RunConfig, hostedConfig: bool) =
     raise newException(TribalQuestError, "Config field mode must be quest.")
   if config.maxSteps < 1:
     raise newException(TribalQuestError, "Config field max_steps must be positive.")
-  if hostedConfig and config.tokens.len != QuestLeaguePlayerCount:
+  if hostedConfig and config.tokens.len notin
+      QuestLeagueMinPlayerCount .. QuestLeagueMaxPlayerCount:
     raise newException(
       TribalQuestError,
-      "Quest league config requires exactly " & $QuestLeaguePlayerCount & " tokens."
+      "Quest league config requires between " & $QuestLeagueMinPlayerCount &
+        " and " & $QuestLeagueMaxPlayerCount & " tokens."
     )
-  if not hostedConfig and config.tokens.len notin [0, QuestLeaguePlayerCount]:
+  if not hostedConfig and config.tokens.len != 0 and config.tokens.len notin
+      QuestLeagueMinPlayerCount .. QuestLeagueMaxPlayerCount:
     raise newException(
       TribalQuestError,
-      "Development config tokens must be empty or contain exactly " &
-        $QuestLeaguePlayerCount & " items."
+      "Development config tokens must be empty or contain between " &
+        $QuestLeagueMinPlayerCount & " and " & $QuestLeagueMaxPlayerCount &
+        " items."
     )
   for token in config.tokens:
     if token.len == 0:
       raise newException(TribalQuestError, "Player tokens must not be empty.")
-  if hostedConfig and config.players.len != QuestLeaguePlayerCount:
+  if hostedConfig and config.players.len != config.tokens.len:
     raise newException(
       TribalQuestError,
-      "Quest league config requires exactly " & $QuestLeaguePlayerCount & " players."
+      "Quest league config requires one player per token."
     )
-  if config.players.len notin [0, QuestLeaguePlayerCount]:
+  if config.players.len notin [0, config.tokens.len]:
     raise newException(
       TribalQuestError,
-      "Config field players must be empty or contain exactly " &
-        $QuestLeaguePlayerCount & " items."
+      "Config field players must be empty or match the token count."
     )
   for player in config.players:
     if player.len == 0:
@@ -189,15 +192,21 @@ proc validate(config: RunConfig, hostedConfig: bool) =
       TribalQuestError,
       "Config field player_connect_timeout_seconds must be non-negative."
     )
-  if config.numAgents != QuestLeaguePlayerCount:
+  if hostedConfig and config.numAgents != config.tokens.len:
     raise newException(
       TribalQuestError,
-      "Config field num_agents must equal " & $QuestLeaguePlayerCount & "."
+      "Config field num_agents must equal the token count."
     )
-  if config.teamCount != QuestLeaguePlayerCount:
+  if config.teamCount != config.numAgents:
     raise newException(
       TribalQuestError,
-      "Config field team_count must equal " & $QuestLeaguePlayerCount & "."
+      "Config field team_count must equal num_agents."
+    )
+  if config.numAgents notin QuestLeagueMinPlayerCount .. QuestLeagueMaxPlayerCount:
+    raise newException(
+      TribalQuestError,
+      "Config field num_agents must be between " & $QuestLeagueMinPlayerCount &
+        " and " & $QuestLeagueMaxPlayerCount & "."
     )
   questFortressEngineConfig(config.seed, config.maxSteps)
     .validateQuestEngineContract()
@@ -239,8 +248,8 @@ when isMainModule:
       players: @[],
       stepsPerSecond: 10,
       playerConnectTimeoutSeconds: 0,
-      numAgents: QuestLeaguePlayerCount,
-      teamCount: QuestLeaguePlayerCount,
+      numAgents: QuestLeagueMaxPlayerCount,
+      teamCount: QuestLeagueMaxPlayerCount,
       fortressDataDir: getEnv(FortressDataDirEnv, "data"),
       saveReplayPath: getEnv("COGAME_SAVE_REPLAY_URI"),
       saveScoresPath: getEnv("COGAME_RESULTS_URI")

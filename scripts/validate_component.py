@@ -55,15 +55,16 @@ def main() -> None:
     schema = json.loads(SCHEMA.read_text())
     assert set(descriptor) == EXPECTED_TOP_LEVEL
     assert descriptor["$schema"] == "./quest_component.schema.json"
-    assert descriptor["component_version"] == 2
+    assert descriptor["component_version"] == 3
     assert descriptor["component"] == "tribal_quest"
     assert descriptor["coworld"] == "tribal_fortress"
     assert descriptor["mode"] == "quest"
     assert descriptor["entrypoint"] == "src/tribal_quest.nim"
     assert descriptor["engine_module"] == "tribal_fortress_engine"
     assert descriptor["league"] == {
-        "variant_id": "quest-8-adventurer",
-        "player_count": 8,
+        "variant_ids": [f"quest-{count}-adventurer" for count in range(2, 9)],
+        "player_count_min": 2,
+        "player_count_max": 8,
         "tokens_field": "tokens",
     }
     assert descriptor["config_contract"]["required"] == EXPECTED_CONFIG
@@ -75,7 +76,8 @@ def main() -> None:
         "victory_condition"
     ]
     assert descriptor["results_contract"]["required"] == EXPECTED_RESULTS
-    assert descriptor["results_contract"]["score_count"] == 8
+    assert descriptor["results_contract"]["score_count_min"] == 2
+    assert descriptor["results_contract"]["score_count_max"] == 8
     assert descriptor["replay_contract"] == {
         "format": "tribal-quest-replay-v1",
         "load_env": "COGAME_LOAD_REPLAY_URI",

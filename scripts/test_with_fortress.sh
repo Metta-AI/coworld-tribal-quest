@@ -54,7 +54,7 @@ cleanup() {
 trap cleanup EXIT
 scores_path="$smoke_root/results.json"
 replay_path="$smoke_root/replay.json"
-config='{"mode":"quest","tokens":["q0","q1","q2","q3","q4","q5","q6","q7"],"players":[{"name":"p0"},{"name":"p1"},{"name":"p2"},{"name":"p3"},{"name":"p4"},{"name":"p5"},{"name":"p6"},{"name":"p7"}],"max_steps":1,"seed":726896,"steps_per_second":1000,"player_connect_timeout_seconds":0,"num_agents":8,"team_count":8,"victory_condition":0}'
+config='{"mode":"quest","tokens":["q0","q1"],"players":[{"name":"p0"},{"name":"p1"}],"max_steps":1,"seed":726896,"steps_per_second":1000,"player_connect_timeout_seconds":0,"num_agents":2,"team_count":2,"victory_condition":0}'
 "$quest_root/out/tribal_quest" \
   --address:127.0.0.1 \
   --port:18181 \
@@ -72,10 +72,10 @@ replay = json.load(open(sys.argv[2], encoding="utf-8"))
 assert scores["mode"] == "quest"
 assert scores["steps"] == 1
 assert scores["truncation_reason"] == "max_steps"
-assert len(scores["scores"]) == 8
-assert len(scores["names"]) == 8
-assert len(scores["survival_ticks"]) == 8
-assert len(scores["explored_tiles"]) == 8
+assert len(scores["scores"]) == 2
+assert len(scores["names"]) == 2
+assert len(scores["survival_ticks"]) == 2
+assert len(scores["explored_tiles"]) == 2
 assert replay["format"] == "tribal-quest-replay-v1"
 for field in (
     "mode",

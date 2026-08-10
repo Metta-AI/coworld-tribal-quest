@@ -2,6 +2,7 @@ import std/[json, os]
 
 import asyncdispatch
 import ws
+import tribal_quest/contract
 
 proc checkReplay(url: string) {.async.} =
   let socket = await newWebSocket(url)
@@ -11,9 +12,10 @@ proc checkReplay(url: string) {.async.} =
     let replay = parseJson(payload)
     doAssert replay["format"].getStr() == "tribal-quest-replay-v1"
     doAssert replay["mode"].getStr() == "quest"
-    doAssert replay["scores"].len == 8
-    doAssert replay["survival_ticks"].len == 8
-    doAssert replay["explored_tiles"].len == 8
+    let playerCount = replay["scores"].len
+    doAssert playerCount in QuestLeagueMinPlayerCount .. QuestLeagueMaxPlayerCount
+    doAssert replay["survival_ticks"].len == playerCount
+    doAssert replay["explored_tiles"].len == playerCount
     echo "Quest replay websocket proof passed"
   finally:
     socket.hangup()

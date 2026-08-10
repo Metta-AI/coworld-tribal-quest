@@ -14,10 +14,10 @@ proc validateQuestEngineContract*(config: FortressEngineConfig) =
   ## Validates the small part of the Fortress engine contract Quest relies on.
   if config.maxSteps < 1:
     raise newException(ValueError, "max_steps must be positive")
-  if config.adventurerSlots < QuestLeaguePlayerCount:
+  if config.adventurerSlots < QuestLeagueMaxPlayerCount:
     raise newException(
       ValueError,
-      "Fortress engine must expose at least " & $QuestLeaguePlayerCount &
+      "Fortress engine must expose at least " & $QuestLeagueMaxPlayerCount &
         " adventurer slots"
     )
   if config.adventurerSlots > QuestAdventurerSlots:

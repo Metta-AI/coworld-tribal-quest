@@ -1,6 +1,6 @@
 {
   "$schema": "./quest_component.schema.json",
-  "component_version": 2,
+  "component_version": 3,
   "component": "tribal_quest",
   "coworld": "tribal_fortress",
   "mode": "quest",
@@ -8,8 +8,17 @@
   "engine_module": "tribal_fortress_engine",
   "engine_runtime": "nimgrid",
   "league": {
-    "variant_id": "quest-8-adventurer",
-    "player_count": 8,
+    "variant_ids": [
+      "quest-2-adventurer",
+      "quest-3-adventurer",
+      "quest-4-adventurer",
+      "quest-5-adventurer",
+      "quest-6-adventurer",
+      "quest-7-adventurer",
+      "quest-8-adventurer"
+    ],
+    "player_count_min": 2,
+    "player_count_max": 8,
     "tokens_field": "tokens"
   },
   "config_contract": {
@@ -42,7 +51,8 @@
       "survival_ticks",
       "explored_tiles"
     ],
-    "score_count": 8
+    "score_count_min": 2,
+    "score_count_max": 8
   },
   "replay_contract": {
     "format": "tribal-quest-replay-v1",

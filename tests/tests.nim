@@ -79,15 +79,20 @@ proc testComponentDescriptor() =
     config = component["config_contract"]
     results = component["results_contract"]
     globalContract = component["global_contract"]
-  doAssert component["component_version"].getInt() == 2
+  doAssert component["component_version"].getInt() == 3
   doAssert component["component"].getStr() == "tribal_quest"
   doAssert component["coworld"].getStr() == "tribal_fortress"
   doAssert component["mode"].getStr() == "quest"
   doAssert component["engine_module"].getStr() == "tribal_fortress_engine"
-  doAssert league["variant_id"].getStr() == "quest-8-adventurer"
-  doAssert league["player_count"].getInt() == QuestLeaguePlayerCount
+  doAssert league["variant_ids"].len ==
+    QuestLeagueMaxPlayerCount - QuestLeagueMinPlayerCount + 1
+  doAssert league["variant_ids"][0].getStr() == "quest-2-adventurer"
+  doAssert league["variant_ids"][^1].getStr() == "quest-8-adventurer"
+  doAssert league["player_count_min"].getInt() == QuestLeagueMinPlayerCount
+  doAssert league["player_count_max"].getInt() == QuestLeagueMaxPlayerCount
   doAssert config["required"].len == 9
-  doAssert results["score_count"].getInt() == QuestLeaguePlayerCount
+  doAssert results["score_count_min"].getInt() == QuestLeagueMinPlayerCount
+  doAssert results["score_count_max"].getInt() == QuestLeagueMaxPlayerCount
   doAssert globalContract["client_route"].getStr() == GlobalClientRoute
   doAssert globalContract["stream_route"].getStr() == "/global"
   doAssert globalContract["protocol"].getStr() == "tribal-quest-global-v1"
