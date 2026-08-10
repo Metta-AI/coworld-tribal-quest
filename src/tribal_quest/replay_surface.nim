@@ -31,7 +31,11 @@ proc isWebSocketUpgrade(request: Request): bool =
 
 proc replayHttpHandler(request: Request) {.gcsafe.} =
   if request.path == "/healthz" and request.httpMethod == "GET":
-    request.respond(200, textHeaders(), "ok\n")
+    request.respond(
+      200,
+      textHeaders("application/json"),
+      "{\"ready\":true}\n"
+    )
   elif request.path == "/client/replay" and request.httpMethod == "GET":
     request.respond(
       200,

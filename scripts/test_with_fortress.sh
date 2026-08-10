@@ -147,7 +147,8 @@ for _ in {1..100}; do
   fi
   sleep 0.05
 done
-curl -fsS http://127.0.0.1:18182/healthz >/dev/null
+curl -fsS http://127.0.0.1:18182/healthz | python3 -c \
+  'import json,sys; assert json.load(sys.stdin) == {"ready": True}'
 curl -fsS http://127.0.0.1:18182/client/replay | grep -q "Tribal Quest Replay"
 nim r \
   -d:release \
