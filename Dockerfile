@@ -29,11 +29,11 @@ WORKDIR /workspace
 COPY --from=fortress-source / ./coworld-tribal-fortress
 
 WORKDIR /workspace/coworld-tribal-fortress
-RUN nimby sync -g nimby.lock
+RUN /usr/local/bin/nimby sync -g nimby.lock
 
 WORKDIR /workspace/coworld-tribal-quest
 COPY nimby.lock .
-RUN nimby sync -g nimby.lock
+RUN /usr/local/bin/nimby sync -g nimby.lock
 COPY . .
 
 ARG NimFlags="-d:release -d:useMalloc --opt:speed --stackTrace:on"

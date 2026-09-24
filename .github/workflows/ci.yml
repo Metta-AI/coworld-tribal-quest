@@ -27,7 +27,7 @@ jobs:
           echo "$HOME/.nimby/nim/bin" >> "$GITHUB_PATH"
 
       - name: Install dependencies
-        run: nimby sync -g nimby.lock
+        run: /usr/local/bin/nimby sync -g nimby.lock
 
       - name: Validate component descriptor
         run: |
