@@ -376,7 +376,9 @@ proc handleQuestAdventurerWebSocket*(
   of OpenEvent:
     discard
   of MessageEvent:
-    if message.kind == BinaryMessage:
+    if message.kind == Ping:
+      websocket.send(message.data, Pong)
+    elif message.kind == BinaryMessage:
       {.gcsafe.}:
         withLock surface.lock:
           if websocket in surface.viewers:

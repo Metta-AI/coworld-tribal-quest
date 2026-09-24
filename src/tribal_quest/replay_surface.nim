@@ -60,10 +60,11 @@ proc replayWebSocketHandler(
   event: WebSocketEvent,
   message: Message
 ) {.gcsafe.} =
-  discard message
   if event == OpenEvent:
     {.gcsafe.}:
       websocket.send(replayPayload, TextMessage)
+  elif event == MessageEvent and message.kind == Ping:
+    websocket.send(message.data, Pong)
 
 proc runQuestReplaySurface*(payload: JsonNode, address: string, port: int) =
   if payload.kind != JObject or payload{"format"}.getStr() !=
