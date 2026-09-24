@@ -120,6 +120,28 @@ The global websocket sends a JSON `view.init` immediately, followed by
 `tribal-quest-global-v1` and contain one adventurer snapshot per active entrant plus
 scores, survival ticks, and explored-tile counts.
 
+## Train an adventurer
+
+The native decision bridge runs the certified Quest mode on Fortress's shared
+engine. Its 446 numeric values contain tick, position, health, seat, and the
+same 21 by 21 palette crop used by the player frame. Its 13 choices are the
+distinct movement, attack, use, and noop button masks accepted by `/player`.
+It rotates the learner across the requested two-to-eight-seat roster and runs
+the bundled adventurer policy in the other seats. The teacher uses that same
+policy; final scores use Quest's survival and exploration scorer.
+
+```sh
+TRIBAL_FORTRESS_PATH=${TRIBAL_FORTRESS_PATH:-$(pwd)/../coworld-tribal-fortress}
+nim c -d:release --opt:speed --path:src --path:$TRIBAL_FORTRESS_PATH/src \
+  -o:out/tribal_quest_training_bridge src/tribal_quest/training_bridge.nim
+```
+
+Pass `out/tribal_quest_training_bridge 2 3000` as the bridge command for
+`quest-2-adventurer`; replace `2` with any certified roster size. The default
+episode length is the certified 3,000 steps. Set the training and posttraining
+bridge response timeout to at least 120 seconds: world initialization takes
+about 45 seconds on a local Apple Silicon machine.
+
 ## Project layout
 
 - `src/tribal_quest.nim`: shared-config entrypoint and development host.
@@ -127,5 +149,6 @@ scores, survival ticks, and explored-tile counts.
 - `src/tribal_quest/fortress_engine.nim`: typed Fortress contract adapter.
 - `src/tribal_quest/gridworld_sprites.nim`: shared-world sprite rendering.
 - `players/adventurer/adventurer.nim`: bundled sprite-protocol pilot.
+- `src/tribal_quest/training_bridge.nim`: certified adventurer decision bridge.
 - `quest_component.json`: non-uploadable shared artifact contract.
 - `tests/`: protocol, descriptor, engine, rendering, and episode proof.

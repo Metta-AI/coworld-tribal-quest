@@ -5,6 +5,7 @@ import ws
 
 import tribal_quest/protocol
 import tribal_quest/sprite_packets
+import tribal_quest/baseline
 
 type
   BotError = object of CatchableError
@@ -44,23 +45,6 @@ proc closeSocket(socket: WebSocket) =
   except CatchableError:
     discard
 
-proc chooseMask(tick, stagnantFrames: int): uint8 =
-  let phase = ((tick div 12) + (stagnantFrames div 3)) mod 6
-  case phase
-  of 0, 1:
-    result = ButtonRight
-  of 2:
-    result = ButtonDown
-  of 3, 4:
-    result = ButtonLeft
-  else:
-    result = ButtonUp
-
-  if tick mod 9 == 0:
-    result = result or ButtonA
-  if tick mod 37 == 0:
-    result = result or ButtonB
-
 proc runBot(config: BotConfig): Future[int] {.async.} =
   let url = config.playerUrl()
   echo "Connecting adventurer bot to " & url
@@ -74,7 +58,7 @@ proc runBot(config: BotConfig): Future[int] {.async.} =
 
   try:
     for tick in 0 ..< config.ticks:
-      let mask = chooseMask(tick, stagnantFrames)
+      let mask = chooseAdventurerMask(tick, stagnantFrames)
       await socket.send(spriteInputPacket(mask), Binary)
       inc sent
 
