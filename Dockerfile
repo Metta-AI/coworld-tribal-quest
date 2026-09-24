@@ -46,6 +46,12 @@ RUN nim c \
   --nimcache:/tmp/cogame-nimcache \
   --out:/bin/tribal_quest \
   src/tribal_quest.nim
+RUN nim c \
+  -d:release --opt:speed \
+  --path:src \
+  --path:/workspace/coworld-tribal-fortress/src \
+  --out:/bin/tribal_quest_training_bridge \
+  src/tribal_quest/training_bridge.nim
 
 FROM debian:bookworm-slim
 
@@ -55,6 +61,7 @@ RUN apt-get update && \
 
 WORKDIR /app
 COPY --from=build /bin/tribal_quest /bin/tribal_quest
+COPY --from=build /bin/tribal_quest_training_bridge /bin/tribal_quest_training_bridge
 COPY --from=build /workspace/coworld-tribal-fortress/data ./data
 
 EXPOSE 8080
