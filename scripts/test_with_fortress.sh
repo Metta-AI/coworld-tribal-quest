@@ -26,6 +26,11 @@ nim c \
   --path:"$quest_root/src" \
   -o:"$quest_root/out/tribal_quest_global_client" \
   "$quest_root/tests/global_client.nim"
+nim c \
+  -d:release \
+  --path:"$quest_root/src" \
+  -o:"$quest_root/out/tribal_quest_ping_client" \
+  "$quest_root/tests/ping_client.nim"
 nim r \
   -d:release \
   --path:"$quest_root/src" \
@@ -109,6 +114,7 @@ for _ in {1..400}; do
 done
 curl -fsS http://127.0.0.1:18183/healthz >/dev/null
 curl -fsS http://127.0.0.1:18183/client/global | grep -q "Tribal Quest Global View"
+"$quest_root/out/tribal_quest_ping_client" ws://127.0.0.1:18183/global
 "$quest_root/out/tribal_quest_global_client" \
   ws://127.0.0.1:18183/global >"$smoke_root/global-client.log" 2>&1 &
 global_client_pid=$!
@@ -150,6 +156,7 @@ done
 curl -fsS http://127.0.0.1:18182/healthz | python3 -c \
   'import json,sys; assert json.load(sys.stdin) == {"ready": True}'
 curl -fsS http://127.0.0.1:18182/client/replay | grep -q "Tribal Quest Replay"
+"$quest_root/out/tribal_quest_ping_client" ws://127.0.0.1:18182/replay
 nim r \
   -d:release \
   --path:"$quest_root/src" \
